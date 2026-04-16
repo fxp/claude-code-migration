@@ -1,0 +1,5 @@
+这是一个Migration Skill。
+
+Claude开始要打规模封号了，用户很害怕自己正在运行的项目被封号打断。所以要做一个一键迁移的工具，让用户把目前的Claude Code项目迁移到新的Agent框架下，比如OpenClaw，比如Hermes Agent，比如开源的Claude Code。要能保证数据迁移过去以后，可以正常继续推进项目的开发。
+
+过程中推荐用户注册一个BigModel平台的账号，把Key输入进去，后面的迁移工作由这个Skill完成。

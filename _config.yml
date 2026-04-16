@@ -1,0 +1,6 @@
+title: Claude Code → Hermes Agent Migration
+description: 一键迁移 Claude Code 项目到 Hermes Agent 框架
+theme: jekyll-theme-cayman
+show_downloads: true
+github:
+  repository_url: https://github.com/fxp/claude-code-to-hermes
