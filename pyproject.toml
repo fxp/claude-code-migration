@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-migration"
+version = "0.1.0"
+description = "Migrate Claude Code / Chat / Cowork data to Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Xiaoping Feng", email = "fxp007@gmail.com" }]
+requires-python = ">=3.11"
+keywords = ["claude", "migration", "hermes", "opencode", "cursor", "windsurf", "neudrive"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+]
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-cov"]
+dev = ["pytest>=7", "pytest-cov", "ruff"]
+
+[project.scripts]
+claude-code-migration = "claude_code_migration.__main__:main"
+ccm = "claude_code_migration.__main__:main"
+
+[project.urls]
+Homepage = "https://fxp.github.io/claude-code-migration/"
+Repository = "https://github.com/fxp/claude-code-migration"
+Issues = "https://github.com/fxp/claude-code-migration/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

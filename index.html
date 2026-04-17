@@ -510,7 +510,7 @@
     <h1>当你担心 Claude 账号被封<br><span class="gradient">先备份，再迁移</span></h1>
     <p class="tagline">
       从 <strong>Claude Code / Chat / Cowork</strong> 迁到
-      <strong>Hermes / Cursor / Codex / Windsurf / Gemini CLI / Copilot / neuDrive</strong>。
+      <strong>Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub</strong>。
       一个 <code>/claude-full-migration</code> 搞定全部。
     </p>
     <div class="cta-row">
@@ -528,7 +528,7 @@
     </div>
     <div class="hero-stats">
       <div><div class="stat-num">47</div><div class="stat-label">CLAUDE CODE 数据类型</div></div>
-      <div><div class="stat-num">7</div><div class="stat-label">目标 AGENT 平台</div></div>
+      <div><div class="stat-num">4</div><div class="stat-label">目标 AGENT 框架</div></div>
       <div><div class="stat-num">6</div><div class="stat-label">组合式 SKILL</div></div>
       <div><div class="stat-num">100%</div><div class="stat-label">无损迁移</div></div>
     </div>
@@ -612,12 +612,10 @@
     </div>
     <div class="targets-grid">
       <div class="target"><div class="target-name">Hermes Agent</div><div class="target-desc">Nous Research · glm-5</div></div>
+      <div class="target"><div class="target-name">OpenCode</div><div class="target-desc">sst/opencode · opencode.json</div></div>
       <div class="target"><div class="target-name">Cursor</div><div class="target-desc">.cursor/rules/*.mdc</div></div>
-      <div class="target"><div class="target-name">Codex CLI</div><div class="target-desc">~/.codex/config.toml</div></div>
       <div class="target"><div class="target-name">Windsurf</div><div class="target-desc">~/.codeium/windsurf/</div></div>
-      <div class="target"><div class="target-name">Gemini CLI</div><div class="target-desc">~/.gemini/settings.json</div></div>
-      <div class="target"><div class="target-name">GitHub Copilot</div><div class="target-desc">.vscode/mcp.json</div></div>
-      <div class="target"><div class="target-name">neuDrive Hub</div><div class="target-desc">agi-bar/neuDrive · MCP</div></div>
+      <div class="target"><div class="target-name">neuDrive Hub</div><div class="target-desc">agi-bar/neuDrive · 对话枢纽</div></div>
     </div>
   </div>
 </section>
@@ -783,11 +781,11 @@ custom_providers:
         <path d="M 195 450 L 195 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
         <text x="210" y="520" class="eco-edge-label">via MCP</text>
 
-        <!-- 本项目 → targets (3 条发散线，表达多目标) -->
-        <path d="M 500 460 C 430 510, 380 540, 340 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
-        <path d="M 650 460 L 650 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
-        <path d="M 800 460 C 850 510, 890 540, 920 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
-        <text x="650" y="520" class="eco-edge-label eco-edge-strong">直迁多目标</text>
+        <!-- 本项目 → targets (3 条发散线 → OpenCode/Cursor/Windsurf) -->
+        <path d="M 500 460 C 450 510, 420 540, 400 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 650 460 C 640 510, 635 540, 635 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 800 460 C 820 510, 820 540, 810 580" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <text x="650" y="510" class="eco-edge-label eco-edge-strong">直迁多目标</text>
 
         <!-- ═══════════════════════════════════════════════════════
              TARGETS — 6 个 Agent 框架
@@ -804,24 +802,19 @@ custom_providers:
           <text x="70" y="48" class="eco-target-sub" text-anchor="middle">sst/opencode</text>
         </g>
         <g class="eco-node eco-target" transform="translate(350,580)">
-          <rect width="140" height="68" rx="8" class="eco-rect"/>
-          <text x="70" y="28" class="eco-target-title" text-anchor="middle">✎ Cursor</text>
-          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">.cursor/rules</text>
+          <rect width="180" height="68" rx="8" class="eco-rect"/>
+          <text x="90" y="28" class="eco-target-title" text-anchor="middle">✎ Cursor</text>
+          <text x="90" y="48" class="eco-target-sub" text-anchor="middle">.cursor/rules/*.mdc</text>
         </g>
-        <g class="eco-node eco-target" transform="translate(505,580)">
-          <rect width="140" height="68" rx="8" class="eco-rect"/>
-          <text x="70" y="28" class="eco-target-title" text-anchor="middle">◎ Codex CLI</text>
-          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">~/.codex/config.toml</text>
+        <g class="eco-node eco-target" transform="translate(545,580)">
+          <rect width="180" height="68" rx="8" class="eco-rect"/>
+          <text x="90" y="28" class="eco-target-title" text-anchor="middle">⚡ Windsurf</text>
+          <text x="90" y="48" class="eco-target-sub" text-anchor="middle">.codeium/windsurf/</text>
         </g>
-        <g class="eco-node eco-target" transform="translate(660,580)">
-          <rect width="140" height="68" rx="8" class="eco-rect"/>
-          <text x="70" y="28" class="eco-target-title" text-anchor="middle">✦ Gemini CLI</text>
-          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">~/.gemini/settings</text>
-        </g>
-        <g class="eco-node eco-target eco-target-ghost" transform="translate(815,580)">
-          <rect width="105" height="68" rx="8" class="eco-rect" stroke-dasharray="4,3"/>
-          <text x="52.5" y="32" class="eco-target-title" text-anchor="middle">+</text>
-          <text x="52.5" y="52" class="eco-target-sub" text-anchor="middle">Windsurf / 飞书<br/>Copilot / Kimi</text>
+        <g class="eco-node eco-target eco-target-ghost" transform="translate(740,580)">
+          <rect width="180" height="68" rx="8" class="eco-rect" stroke-dasharray="4,3"/>
+          <text x="90" y="32" class="eco-target-title" text-anchor="middle">+ 更多</text>
+          <text x="90" y="52" class="eco-target-sub" text-anchor="middle">Copilot · Kimi · 飞书</text>
         </g>
       </svg>
     </div>
