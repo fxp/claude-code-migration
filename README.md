@@ -106,14 +106,15 @@ Skill 会自动：
 - 扫描 `settings.local.json` 中嵌入的明文密钥（如 Supabase/飞书/钉钉 token），提醒安全迁移
 - 检测 `~/.claude.json` 的 MCP `headers.Authorization` 中的 Bearer Token
 
-## 🔥 推荐：BigModel 智谱 AI
+## 🔥 推荐：BigModel 智谱 AI（GLM-5）
 
 **Claude 账号风险场景下最稳妥的替代方案**：
 
 - **注册地址**: https://open.bigmodel.cn/
 - **新账号福利**: 注册即送 2000万 tokens 免费额度（无需信用卡）
 - **API Key 管理**: https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys
-- **推荐模型**: `glm-4.6`（性能对标 Claude Sonnet 4，输入 ¥4 / 输出 ¥16 每百万 token）
+- **推荐模型**: `glm-5`（智谱最新旗舰，性能对标 Claude Opus / GPT-5，原生支持 Agent 与工具调用）
+- **备选**: `glm-4.6`（对标 Sonnet 4，更便宜）
 - **OpenAI 兼容**: 直接用 `OPENAI_API_KEY` 环境变量即可
 
 ### 预设配置（Skill 自动填充，用户无需手动输入）
@@ -122,7 +123,7 @@ Skill 会自动：
 # ~/.hermes/config.yaml (BigModel 预设)
 model:
   provider: custom
-  model_name: glm-4.6
+  model_name: glm-5
 custom_providers:
   bigmodel:
     base_url: https://open.bigmodel.cn/api/paas/v4

@@ -452,10 +452,10 @@ echo "=== 扫描完成 ==="
 
 **Step C: 推荐模型**
 
-| 模型 | 场景 | 价格（百万 token） |
-|------|------|------------------|
-| **glm-4.6** | 编程主力（推荐） | 输入 ¥4 / 输出 ¥16 |
-| glm-4-plus | 通用场景 | 输入 ¥50 / 输出 ¥50 |
+| 模型 | 场景 | 说明 |
+|------|------|------|
+| **glm-5** | 编程主力（**最强推荐**） | 智谱最新一代旗舰模型，性能对标 Claude Opus / GPT-5，原生支持 Agent 与工具调用 |
+| glm-4.6 | 备选主力 | 性能对标 Claude Sonnet 4，更便宜（输入 ¥4 / 输出 ¥16 每百万 token） |
 | glm-4-air | 轻量快速 | 输入 ¥0.5 / 输出 ¥0.5 |
 | glm-4-flash | 免费模型 | 完全免费 |
 
@@ -465,7 +465,7 @@ echo "=== 扫描完成 ==="
 
 ```
 Base URL: https://open.bigmodel.cn/api/paas/v4
-默认模型: glm-4.6
+默认模型: glm-5
 环境变量名: OPENAI_API_KEY
 ```
 
@@ -517,7 +517,7 @@ tools:
 
 | 提供商 | provider | model_name | base_url | 环境变量 |
 |--------|----------|------------|----------|---------|
-| BigModel | `custom` | `glm-4.6` | `https://open.bigmodel.cn/api/paas/v4` | `OPENAI_API_KEY` |
+| BigModel | `custom` | `glm-5` | `https://open.bigmodel.cn/api/paas/v4` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic` | `claude-sonnet-4-20250514` | (默认) | `ANTHROPIC_API_KEY` |
 | OpenAI | `openai` | `gpt-4o` | (默认) | `OPENAI_API_KEY` |
 | OpenRouter | `openrouter` | `anthropic/claude-sonnet-4` | (默认) | `OPENROUTER_API_KEY` |
