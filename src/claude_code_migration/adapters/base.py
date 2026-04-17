@@ -46,29 +46,95 @@ def ensure_dir(p: Path) -> Path:
 def build_universal_agents_md(scan: dict[str, Any], header_note: str = "") -> str:
     """AGENTS.md content — universal across Cursor/Codex/Gemini/OpenCode.
 
-    Merges CLAUDE.md + project memory + rules into a single file.
+    Merges every signal we have: CLAUDE.md + memory + rules + hooks + env vars +
+    MCP inventory + agents + skills + launch configs. Falls back to a reasonable
+    project synthesis when no explicit CLAUDE.md exists.
     """
     parts: list[str] = []
-    parts.append("# Project Agent Instructions\n")
+    parts.append("# Project Agent Instructions")
     if header_note:
         parts.append(f"> {header_note}\n")
-    parts.append("")
 
     cm = scan.get("claude_md")
     if cm:
-        parts.append("## Project Guidelines (from CLAUDE.md)\n")
-        parts.append(cm.strip())
+        parts.append("## Project Guidelines (from CLAUDE.md)\n\n" + cm.strip())
 
     # project + feedback memory
+    mem_added = False
     for m in scan.get("memory") or []:
         mtype = m.get("type")
         if mtype in ("project", "feedback"):
-            parts.append(f"\n## {m.get('file', 'memory')}")
-            parts.append(m.get("content", "").strip())
+            if not mem_added:
+                parts.append("## Project Memory")
+                mem_added = True
+            parts.append(f"### {m.get('file', 'memory')}\n\n{m.get('content', '').strip()}")
 
     # rules
-    for r in scan.get("rules") or []:
-        parts.append(f"\n## Rule: {r.get('file', 'rule')}")
-        parts.append(r.get("content", "").strip())
+    rules = scan.get("rules") or []
+    if rules:
+        parts.append("## Rules")
+        for r in rules:
+            parts.append(f"### {r.get('file', 'rule')}\n\n{r.get('content', '').strip()}")
 
-    return "\n\n".join(p for p in parts if p) + "\n"
+    # Agents inventory (Claude Code subagents)
+    agents = scan.get("agents") or []
+    if agents:
+        parts.append("## Custom Agents Available")
+        for a in agents[:10]:
+            desc = (a.get('description') or '').split('\n')[0][:200]
+            parts.append(f"- **{a.get('name')}**: {desc}")
+
+    # Project settings / hooks / env / launch
+    proj_settings = scan.get("settings_project") or {}
+    sections: list[str] = []
+    if proj_settings.get("hooks"):
+        hook_events = list((proj_settings["hooks"] or {}).keys())
+        sections.append(f"- **Hooks configured**: {', '.join(hook_events)}")
+    if proj_settings.get("env"):
+        env_vars = list(proj_settings["env"].keys())
+        sections.append(f"- **Project env vars**: {', '.join(env_vars)}")
+    if proj_settings.get("enableAllProjectMcpServers"):
+        sections.append("- **enableAllProjectMcpServers: true**")
+    launch = scan.get("launch_json")
+    if launch and launch.get("configurations"):
+        names = [c.get("name", "?") for c in launch["configurations"]]
+        sections.append(f"- **Launch configs**: {', '.join(names)}")
+    if sections:
+        parts.append("## Project Setup\n\n" + "\n".join(sections))
+
+    # MCP servers inventory
+    mcps_global = scan.get("mcp_servers_global") or {}
+    mcps_project = scan.get("mcp_servers_project") or {}
+    if mcps_global or mcps_project:
+        mcp_lines: list[str] = []
+        for name, srv in mcps_global.items():
+            url = srv.get("url") or f"stdio: {srv.get('command','')}"
+            mcp_lines.append(f"- `{name}` (global): {url}")
+        for name, srv in mcps_project.items():
+            url = srv.get("url") or f"stdio: {srv.get('command','')}"
+            mcp_lines.append(f"- `{name}` (project): {url}")
+        parts.append("## Connected MCP Servers\n\n" + "\n".join(mcp_lines))
+
+    # Permission summary (helps the agent understand what's allowed)
+    perms = (proj_settings.get("permissions") or {}).get("allow") or []
+    if perms:
+        parts.append(f"## Allowed Tools ({len(perms)} rules)\n\n" +
+                     "\n".join(f"- `{p}`" for p in perms[:15]) +
+                     (f"\n- _(...{len(perms)-15} more)_" if len(perms) > 15 else ""))
+
+    # Skills inventory
+    skills_proj = scan.get("skills_project") or []
+    if skills_proj:
+        parts.append("## Project-Local Skills\n\n" +
+                     "\n".join(f"- **{s.get('name')}**: {(s.get('description') or '')[:150]}"
+                               for s in skills_proj))
+
+    # Last resort: if we still have nothing substantial, add project metadata
+    body = "\n\n".join(p for p in parts if p.strip())
+    if len(body) < 200 and scan.get("project_dir"):
+        parts.append(f"## Project Location\n\nMigrated from `{scan['project_dir']}` "
+                     f"via claude-code-migration. No CLAUDE.md was present; this file was "
+                     f"synthesized from available Claude Code signals.")
+        body = "\n\n".join(p for p in parts if p.strip())
+
+    return body + "\n"
