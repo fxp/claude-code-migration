@@ -14,10 +14,11 @@
 
 Claude 账号风控收紧，担心积累的对话/项目/技能丢失？这个仓库提供 4 个互相协作的 Claude Code Skill，覆盖 Claude 生态的三个产品线，并通过 [neuDrive](https://github.com/agi-bar/neuDrive) 作为中心化枢纽让任意 Agent（Hermes / Cursor / Codex / Kimi / 飞书）能共享同一份迁移数据。
 
-## 4 个 Skill 总览
+## 5 个 Skill 总览
 
 | Skill | 覆盖数据 | 状态 |
 |-------|---------|------|
+| [`/claude-full-migration`](./skills/claude-full-migration/SKILL.md) | **Meta-skill** — 一键编排下面 4 个 skill，自动发现数据源、规划执行、断点续跑、汇总审计 | ✅ v1.0 |
 | [`/hermes-migration`](./skills/hermes-migration/SKILL.md) | **Claude Code** — 47 种本地数据类型，`~/.claude/` + 项目 `.claude/` 全扫描，直迁到 Hermes Agent | ✅ v4.0 |
 | [`/chat-migration`](./skills/chat-migration/SKILL.md) | **Claude.ai Chat** — 官方 ZIP 导出 (conversations.json + projects.json + users.json)，提取 Artifacts / 附件 / 分支对话，输出 Markdown / Obsidian / neuDrive | ✅ v1.0 |
 | [`/cowork-migration`](./skills/cowork-migration/SKILL.md) | **Claude Cowork** — 团队 Workspace 导出，按成员分目录，扫描团队密钥，可选浏览器补齐 Skills/Connectors | ✅ v1.0 |
@@ -55,6 +56,22 @@ cp -r claude-code-to-hermes/skills/* ~/.claude/skills/
 ```
 
 ### 2. 按场景选择
+
+**🌟 最简单: 全生态一键迁移**
+
+```bash
+claude
+> /claude-full-migration
+```
+
+Meta-skill 会自动：
+- 发现你手上有什么数据（Chat ZIP? Code 本地? Cowork admin?）
+- 问你要迁到哪里（Hermes / Markdown / neuDrive / 多个 Agent）
+- 展示执行计划让你确认
+- 按正确顺序调用子 skill
+- 生成汇总审计报告
+
+---
 
 **场景 A: 只迁 Claude Code → Hermes（最常见）**
 

@@ -253,7 +253,7 @@ neuDrive/
 - 本地自部署 neuDrive（docker-compose up）
 - 使用官方托管 https://www.neudrive.ai
 
-### Phase 5: 统筹 Skill 🟡 规划中
+### Phase 5: 统筹 Skill ✅ 已完成
 
 **新增 Skill**: `~/.claude/skills/claude-full-migration/SKILL.md`
 
