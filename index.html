@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>claude-code-migration — Claude 全生态迁移工具集</title>
-<meta name="description" content="从 Claude Code / Chat / Cowork 迁移到 Hermes / Cursor / Codex / Windsurf / Gemini CLI / Copilot / neuDrive 的 Skill 套件">
+<meta name="description" content="从 Claude Code / Chat / Cowork 迁移到 Hermes / OpenCode / Cursor / Windsurf / neuDrive 的 Python 包 + Claude Code Skill 套件">
 <style>
   :root {
     --bg: #0b0b0f;
@@ -511,7 +511,7 @@
     <p class="tagline">
       从 <strong>Claude Code / Chat / Cowork</strong> 迁到
       <strong>Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub</strong>。
-      一个 <code>/claude-full-migration</code> 搞定全部。
+      Python CLI <code>ccm</code> 或 Claude Code Skill <code>/claude-full-migration</code>。
     </p>
     <div class="cta-row">
       <a href="#quickstart" class="btn btn-primary">
@@ -529,7 +529,7 @@
     <div class="hero-stats">
       <div><div class="stat-num">47</div><div class="stat-label">CLAUDE CODE 数据类型</div></div>
       <div><div class="stat-num">4</div><div class="stat-label">目标 AGENT 框架</div></div>
-      <div><div class="stat-num">6</div><div class="stat-label">组合式 SKILL</div></div>
+      <div><div class="stat-num">18</div><div class="stat-label">端到端测试通过</div></div>
       <div><div class="stat-num">100%</div><div class="stat-label">无损迁移</div></div>
     </div>
   </div>
@@ -581,7 +581,7 @@
       </a>
       <a class="skill-card" href="https://github.com/fxp/claude-code-migration/blob/main/skills/code-migration/SKILL.md">
         <div class="hdr"><code>/code-migration</code><span class="badge">v1.0</span></div>
-        <p>Claude Code → <strong>多目标</strong>：Hermes / Cursor / Codex / Windsurf / Gemini / Copilot。同一份扫描数据，6 种目标格式。</p>
+        <p>Claude Code → <strong>多目标</strong>：Hermes / OpenCode / Cursor / Windsurf。同一份扫描数据，4 种目标格式。</p>
       </a>
       <a class="skill-card" href="https://github.com/fxp/claude-code-migration/blob/main/skills/hermes-migration/SKILL.md">
         <div class="hdr"><code>/hermes-migration</code><span class="badge">v4.0</span></div>
@@ -624,41 +624,70 @@
   <div class="container">
     <div class="section-header">
       <span class="section-tag">QUICK START</span>
-      <h2 class="section-title">三步开始</h2>
+      <h2 class="section-title">两种使用方式</h2>
+      <p class="section-sub">Python 包可脚本化、可测试、可 CI；Skills 版本无需 Python 环境。</p>
     </div>
 
-    <h3 style="margin-bottom:12px;font-size:17px;">1. 安装 Skill 套件</h3>
+    <h3 style="margin-bottom:12px;font-size:18px;color:var(--accent);">方式 A · Python 包（推荐）</h3>
     <div class="qs-block">
-      <pre><code>git clone https://github.com/fxp/claude-code-migration.git
+      <pre><code>git clone https://github.com/fxp/claude-code-migration
+cd claude-code-migration
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .</code></pre>
+    </div>
+
+    <p style="color:var(--text-dim);margin:14px 0 10px;">扫描一个项目：</p>
+    <div class="qs-block">
+      <pre><code>ccm scan --project /path/to/your-project</code></pre>
+    </div>
+
+    <p style="color:var(--text-dim);margin:14px 0 10px;">一次迁到 4 个目标（默认 staging，不动真实项目）：</p>
+    <div class="qs-block">
+      <pre><code>ccm migrate --project /path/to/your-project \
+            --target hermes,opencode,cursor,windsurf \
+            --out ./ccm-output</code></pre>
+    </div>
+
+    <p style="color:var(--text-dim);margin:14px 0 10px;">可选：加上 Claude.ai 官方导出 ZIP（Chat / Cowork）：</p>
+    <div class="qs-block">
+      <pre><code>ccm migrate --project /path/to/your-project \
+            --cowork-zip ~/Downloads/claude-data-export.zip \
+            --target hermes,opencode --out ./ccm-output</code></pre>
+    </div>
+
+    <p style="color:var(--text-dim);margin:14px 0 10px;">推送到 neuDrive Hub：</p>
+    <div class="qs-block">
+      <pre><code>ccm push-hub --scan ./ccm-output/scan.json \
+             --token $NEUDRIVE_TOKEN \
+             --api-base https://www.neudrive.ai</code></pre>
+    </div>
+
+    <h3 style="margin: 40px 0 12px;font-size:18px;color:var(--text-dim);">方式 B · Claude Code Skills（无 Python 环境）</h3>
+    <div class="qs-block">
+      <pre><code>git clone https://github.com/fxp/claude-code-migration
 mkdir -p ~/.claude/skills
 cp -r claude-code-migration/skills/* ~/.claude/skills/</code></pre>
     </div>
-
-    <h3 style="margin: 28px 0 12px;font-size:17px;">2. 在 Claude Code 中运行</h3>
+    <p style="color:var(--text-dim);margin:14px 0 10px;">然后在 Claude Code 里：</p>
     <div class="qs-block">
       <pre><code>claude
 &gt; /claude-full-migration</code></pre>
     </div>
 
-    <h3 style="margin: 28px 0 12px;font-size:17px;">3. Skill 自动做剩下所有</h3>
-    <p style="color:var(--text-dim);margin-bottom:20px;">
-      发现数据源 → 选择目标 → 规划执行 → 迁移 → 密钥入 Vault → 多 Agent 接入片段
-    </p>
-
-    <h3 style="margin: 36px 0 12px;font-size:17px;">推荐配 BigModel GLM-5</h3>
+    <h3 style="margin: 40px 0 12px;font-size:17px;">推荐配 BigModel GLM-5</h3>
     <p style="color:var(--text-dim);margin-bottom:14px;">
       <strong>2000 万 tokens 免费额度</strong>，性能对标 Claude Opus / GPT-5。
       <a href="https://open.bigmodel.cn/" style="margin-left:8px;">注册 →</a>
+      Adapter 自动为每个目标生成对应 provider 配置（Hermes YAML / OpenCode JSON）。
+    </p>
+
+    <h3 style="margin: 40px 0 12px;font-size:17px;">测试</h3>
+    <p style="color:var(--text-dim);margin-bottom:14px;">
+      仓库含 18 个端到端测试（含真实子进程执行，如跑 <code>opencode models</code> 验证迁移的配置被识别）：
     </p>
     <div class="qs-block">
-      <pre><code># ~/.hermes/config.yaml (code-migration 自动生成)
-model:
-  provider: custom
-  model_name: glm-5
-custom_providers:
-  bigmodel:
-    base_url: https://open.bigmodel.cn/api/paas/v4
-    api_key: ${OPENAI_API_KEY}</code></pre>
+      <pre><code>pip install pytest
+pytest tests/             # 18 passed</code></pre>
     </div>
   </div>
 </section>

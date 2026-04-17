@@ -2,7 +2,7 @@
 
 > 从 Claude 全家桶（Chat / Cowork / Code）一键迁移到任意 Agent 平台的完整解决方案。
 >
-> 核心思路：**不直接点对点迁移**，而是通过 [neuDrive](https://github.com/agi-bar/neuDrive) 中心化身份层做**一次导出、多次消费**，让 Hermes / Cursor / Codex / Kimi / 飞书等任意 Agent 都能拉取同一份身份+记忆+技能。
+> 核心思路：**不直接点对点迁移**，而是通过 [neuDrive](https://github.com/agi-bar/neuDrive) 中心化身份层做**一次导出、多次消费**，让 Hermes / OpenCode / Cursor / Windsurf 等任意 Agent 都能拉取同一份身份+记忆+技能。
 
 ---
 
@@ -42,7 +42,7 @@ Claude 生态有三个产品线，各自产生独立的数据：
 **模式 A: 直迁到目标 Agent**（适合只用一个 Agent 的用户）
 
 ```
-Claude.* → skill → Hermes (or Cursor / Codex / ...)
+Claude.* → skill/ccm → Hermes (or OpenCode / Cursor / Windsurf)
 ```
 
 **模式 B: 通过 neuDrive 中转**（推荐 — 适合多 Agent 用户）
@@ -197,13 +197,29 @@ neuDrive/
 
 ### Phase 1: 当前已完成 ✅
 
+**Python 包（主要交付）**
+- [x] `claude-code-migration` v0.1.0 — pip installable，CLI `ccm`
+- [x] Scanner 覆盖 47 种 Claude Code 数据类型
+- [x] 4 个 adapter（Hermes / OpenCode / Cursor / Windsurf），每个格式经真实目标工具验证
+- [x] Cowork 解析器（2026 ZIP schema，含 Artifacts/附件/分支对话）
+- [x] neuDrive Hub HTTP 客户端（不拷代码，只调 API）
+- [x] Secret detection + per-target env interpolation（无明文密钥泄漏，测试断言）
+- [x] 18 个端到端测试（7 format-level + 11 live-tool-level）
+- [x] 安全默认：adapters 默认 staging，不动真实项目；需 `--in-place` 显式才写入
+
+**Claude Code Skills（并行交付）**
 - [x] `hermes-migration` v4.0 — Claude Code → Hermes（47+ 数据类型）
-- [x] `chat-migration` v1.0 — Claude.ai ZIP 解析（content[] 结构化、Artifacts 去重、附件下载）
+- [x] `chat-migration` v1.0 — Claude.ai ZIP 解析
 - [x] `cowork-migration` v1.0 — 团队导出 + 成员归属 + 密钥扫描
-- [x] `neudrive-sync` v1.0 — neuDrive canonical paths 适配 + Vault + Bundle
+- [x] `code-migration` v1.0 — 多目标泛化
+- [x] `neudrive-sync` v1.0 — neuDrive canonical paths 适配
+- [x] `claude-full-migration` v1.0 — meta-skill 编排
+
+**基础设施**
 - [x] neuDrive 源码调研（docs/neudrive-study.md）
-- [x] GitHub 公开仓库 + Pages
+- [x] GitHub 公开仓库 + Pages（landing page）
 - [x] BigModel/GLM-5 作为推荐 LLM 提供商
+- [x] 两个真实项目 E2E 测试：OpenClaw Course + IdeaToProd
 
 ### Phase 2: Chat 导出 ✅ 已完成
 
@@ -264,7 +280,7 @@ neuDrive/
 Phase 0: 自检与更新（读 Claude Code 最新文档）
 
 Phase 1: 选择模式
-  A) 直迁到某个目标 (Hermes/Cursor/Codex)
+  A) 直迁到某个目标 (Hermes/OpenCode/Cursor/Windsurf)
   B) 通过 neuDrive 中转（推荐）
 
 Phase 2: 选择数据源（多选）
@@ -288,14 +304,17 @@ Phase 5: 验证 + 完成报告
 
 ## 目标 Agent 适配矩阵
 
-| 目标 Agent | Chat 数据 | Cowork 数据 | CC 数据 | 连接方式 |
-|-----------|---------|-------------|---------|---------|
-| **Hermes Agent** | ✅ (via neuDrive 或 SKILL.md) | ✅ (via neuDrive) | ✅ hermes-migration | Direct + MCP |
-| **Cursor / Windsurf** | ✅ (via neuDrive) | ✅ (via neuDrive) | ✅ (via .cursor/rules) | neuDrive MCP |
-| **OpenAI Codex CLI** | ✅ (via AGENTS.md) | ✅ | ✅ | neuDrive MCP |
-| **Kimi K2 / Moonshot** | ✅ | ✅ | via config.yaml | neuDrive MCP |
-| **飞书 / Feishu AI** | ✅ | ✅ | — | neuDrive MCP |
-| **Gemini CLI** | ✅ | ✅ | — | neuDrive MCP |
+当前 Python 适配器覆盖 4 个框架。连通性通过真实子进程执行验证（`opencode models`、`opencode mcp list`、SQLite FTS5 查询等）。
+
+| 目标 Agent | Chat 数据 | Cowork 数据 | CC 数据 | 连接方式 | 适配器 |
+|-----------|---------|-------------|---------|---------|-------|
+| **Hermes Agent** | ✅ (via neuDrive) | ✅ (via neuDrive) | ✅ 直迁（SQLite FTS5） | Direct + MCP | `adapters/hermes.py` |
+| **OpenCode** | ✅ (via AGENTS.md) | ✅ | ✅ 直迁（cc-* skills） | Direct + MCP | `adapters/opencode.py` |
+| **Cursor** | ✅ (via neuDrive) | ✅ (via neuDrive) | ✅ `.cursor/rules/*.mdc` | Direct | `adapters/cursor.py` |
+| **Windsurf** | ✅ (via neuDrive) | ✅ (via neuDrive) | ✅ `.windsurfrules` | Direct | `adapters/windsurf.py` |
+| **Kimi / 飞书 / Copilot** | (via neuDrive MCP) | (via neuDrive MCP) | (via neuDrive MCP) | neuDrive MCP | future |
+
+注意：Gemini CLI 和 Codex CLI 作为目标已在早期版本中被评估，但未纳入 v0.1.0 的优先级（用户反馈聚焦 Hermes / OpenCode / Cursor / Windsurf 四框架）。
 
 ---
 
@@ -348,7 +367,7 @@ claude-code-migration/
 ├── MIGRATION_STRATEGY.md                  # 本文档
 ├── skills/
 │   ├── claude-full-migration/SKILL.md    # meta-skill (入口)
-│   ├── code-migration/SKILL.md           # Claude Code → 多目标 (Hermes/Cursor/Codex/Windsurf/Gemini/Copilot)
+│   ├── code-migration/SKILL.md           # Claude Code → 多目标 (Hermes/OpenCode/Cursor/Windsurf)
 │   ├── hermes-migration/SKILL.md         # Claude Code → Hermes 专用 (深度优化)
 │   ├── chat-migration/SKILL.md           # Claude.ai Chat
 │   ├── cowork-migration/SKILL.md         # Claude Cowork

@@ -1,267 +1,195 @@
-# Claude 全生态迁移工具集
+# claude-code-migration
 
-> 从 Claude 全家桶（Chat / Cowork / Code）迁移到任意 Agent 平台的完整 Skill 套件
+> Python 工具集 + Claude Code Skills，把 Claude Code / Chat / Cowork 的本地数据迁到 Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub
 
-[![hermes-migration](https://img.shields.io/badge/hermes--migration-v4.0-blue)](./skills/hermes-migration/SKILL.md)
-[![chat-migration](https://img.shields.io/badge/chat--migration-v1.0-green)](./skills/chat-migration/SKILL.md)
-[![cowork-migration](https://img.shields.io/badge/cowork--migration-v1.0-orange)](./skills/cowork-migration/SKILL.md)
-[![neudrive-sync](https://img.shields.io/badge/neudrive--sync-v1.0-purple)](./skills/neudrive-sync/SKILL.md)
+[![package](https://img.shields.io/badge/package-v0.1.0-blue)](./pyproject.toml)
+[![tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)](./tests/)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](./pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](./LICENSE)
 
 ---
 
 ## 背景
 
-Claude 账号风控收紧，担心积累的对话/项目/技能丢失？这个仓库提供 4 个互相协作的 Claude Code Skill，覆盖 Claude 生态的三个产品线，并通过 [neuDrive](https://github.com/agi-bar/neuDrive) 作为中心化枢纽让任意 Agent（Hermes / Cursor / Codex / Kimi / 飞书）能共享同一份迁移数据。
+Claude 账号风控收紧，担心积累的 CLAUDE.md / 对话 / 项目 / 自定义 agents / 技能丢失？
 
-## 6 个 Skill 总览
+这个仓库提供两种等效的使用方式：
 
-| Skill | 覆盖数据 | 状态 |
-|-------|---------|------|
-| [`/claude-full-migration`](./skills/claude-full-migration/SKILL.md) | **Meta-skill** — 一键编排下面所有 skill，自动发现数据源、规划执行、断点续跑、汇总审计 | ✅ v1.0 |
-| [`/code-migration`](./skills/code-migration/SKILL.md) | **多目标** Claude Code → Hermes / **Cursor / Codex / Windsurf / Gemini CLI / Copilot** — 复用 hermes 的扫描器，替换目标适配器 | ✅ v1.0 |
-| [`/hermes-migration`](./skills/hermes-migration/SKILL.md) | **Claude Code → Hermes 专用** — 47 种本地数据类型全扫描，SQLite FTS5 会话导入，Hermes Agent 直迁 | ✅ v4.0 |
-| [`/chat-migration`](./skills/chat-migration/SKILL.md) | **Claude.ai Chat** — 官方 ZIP 导出 (conversations.json + projects.json + users.json)，提取 Artifacts / 附件 / 分支对话，输出 Markdown / Obsidian / neuDrive | ✅ v1.0 |
-| [`/cowork-migration`](./skills/cowork-migration/SKILL.md) | **Claude Cowork** — 团队 Workspace 导出，按成员分目录，扫描团队密钥，可选浏览器补齐 Skills/Connectors | ✅ v1.0 |
-| [`/neudrive-sync`](./skills/neudrive-sync/SKILL.md) | **neuDrive 枢纽** — 把上面的输出适配到 neuDrive canonical paths，走 SDK/API/Bundle，让多 Agent 共享身份+记忆+技能 | ✅ v1.0 |
+1. **Python 包**（推荐）— `pip install` 后用 `ccm` CLI，跑得起测试、可集成进 CI
+2. **Claude Code Skills** — 在 Claude Code 里直接 `/claude-full-migration`，适合无 Python 环境场景
 
-### `/hermes-migration` vs `/code-migration`
-
-两者**共享扫描逻辑**，区别在输出适配：
-
-- `/hermes-migration` — 针对 Hermes Agent 做了深度优化（SQLite FTS5、Vault、Skills 完整迁移），**47 种数据类型一项不漏**。如果你就是要用 Hermes，选它。
-- `/code-migration` — **多目标**泛化版。覆盖 6 个目标（Hermes/Cursor/Codex/Windsurf/Gemini/Copilot）。各目标的数据粒度取决于目标平台的能力上限（如 Cursor 没有会话恢复，就只能归档 markdown）。如果你要迁多个 Agent，选它。
-
-两者可**同时**使用 — 比如先 `/hermes-migration` 拿到完整 Hermes 环境，再 `/code-migration --targets=cursor,codex` 把同一份数据投射到 Cursor + Codex。
-
-## 推荐使用流程
+## 工具目标
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  选择你要迁移的数据源（可多选）                            │
-│                                                          │
-│   Claude.ai Chat  →  /chat-migration                    │
-│   Claude Cowork   →  /cowork-migration                  │
-│   Claude Code     →  /hermes-migration                  │
-│                                                          │
-│  选择目标：                                               │
-│                                                          │
-│  A. 直迁到单个 Agent                                      │
-│     Claude Code → Hermes    （/hermes-migration 直出）    │
-│     Chat → Markdown/Obsidian（/chat-migration 直出）     │
-│                                                          │
-│  B. 通过 neuDrive 中转（推荐 — 多 Agent 协作）            │
-│     任意来源 → /neudrive-sync → hub → 所有 Agent (MCP)   │
-└─────────────────────────────────────────────────────────┘
+SOURCES (Claude.ai 官方)          MIGRATION (2 条路线)         TARGETS (4 个 Agent 框架)
+──────────────────────────        ──────────────────────       ──────────────────────────
+💬 Chat          ──────────▶      🔱 neuDrive Hub   ───────▶   🔱 Hermes Agent (Nous Research)
+👥 Cowork        ──────────▶         (对话归档主场)              ◇ OpenCode (sst/opencode)
+💻 Claude Code   ──┬──────▶       ⚙ claude-code-migration ──▶   ✎ Cursor
+                   │ (可选经 Hub)     (本项目·Cowork+Code)        ⚡ Windsurf
+                   └──────────▶
 ```
 
-## 快速开始
+## Python 包（推荐）
 
-### 1. 安装全部 Skill
+### 安装
 
 ```bash
-git clone https://github.com/fxp/claude-code-migration.git
-mkdir -p ~/.claude/skills
-cp -r claude-code-migration/skills/* ~/.claude/skills/
+git clone https://github.com/fxp/claude-code-migration
+cd claude-code-migration
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 ```
 
-### 2. 按场景选择
+CLI 入口：`ccm` 或 `claude-code-migration`。
 
-**🌟 最简单: 全生态一键迁移**
+### 快速使用
 
 ```bash
-claude
-> /claude-full-migration
+# 1. 扫描一个项目（只读，输出摘要）
+ccm scan --project /path/to/your-project
+
+# 2. 迁移到某个目标（产物默认在 ./ccm-output/<target>-target/）
+ccm migrate --project /path/to/your-project \
+            --target hermes \
+            --out ./ccm-output
+
+# 3. 多目标并行（一份 scan 生成 4 套配置）
+ccm migrate --project /path/to/your-project \
+            --target hermes,opencode,cursor,windsurf \
+            --out ./ccm-output
+
+# 4. 含 Claude.ai / Cowork ZIP 导出（从 Settings → Privacy → Export data 拿到）
+ccm migrate --project /path/to/your-project \
+            --cowork-zip ~/Downloads/claude-data-export.zip \
+            --target hermes,opencode \
+            --out ./ccm-output
+
+# 5. 推送到 neuDrive Hub (agi-bar/neuDrive)
+ccm push-hub --scan ./ccm-output/scan.json \
+             --token $NEUDRIVE_TOKEN \
+             --api-base https://www.neudrive.ai
 ```
 
-Meta-skill 会自动：
-- 发现你手上有什么数据（Chat ZIP? Code 本地? Cowork admin?）
-- 问你要迁到哪里（Hermes / Markdown / neuDrive / 多个 Agent）
-- 展示执行计划让你确认
-- 按正确顺序调用子 skill
-- 生成汇总审计报告
+### 安全默认
 
----
+⚠️ 默认 **不动你的真实项目目录**。所有产物包括那些"本应放到项目根"的文件（`.cursor/rules/`, `.windsurfrules`, `AGENTS.md`, `.hermes.md`）都被 staging 到 `<out>/<target>-target/<project-name>/` 下。
 
-**场景 A: 只迁 Claude Code → Hermes（最常见）**
+确认无误后复制过去，或用 `--in-place` 让工具直接写入项目（**仅在干净 git 分支上使用**）。
+
+### 架构
+
+```
+src/claude_code_migration/
+├── scanner.py              Claude Code 数据扫描（47 种类型）
+├── secrets.py              API Key / Bearer token 检测
+├── cowork.py               Claude.ai ZIP 解析（2026 schema）
+├── hub.py                  neuDrive HTTP 客户端（调 API，不拷代码）
+├── __main__.py             CLI
+└── adapters/
+    ├── base.py             Adapter 抽象类 + AGENTS.md 合成器
+    ├── hermes.py           config.yaml + memories/ + state.db SQLite FTS5
+    ├── opencode.py         opencode.json + mcp 本地/远程 + skills
+    ├── cursor.py           .cursor/rules/*.mdc + .cursor/mcp.json
+    └── windsurf.py         .windsurfrules + .windsurf/rules/ + mcp_config.json
+```
+
+### 测试
 
 ```bash
-cd /path/to/your-project
-claude
-> /hermes-migration
+pip install pytest
+pytest tests/            # 18 个测试全部通过
 ```
 
-Skill 会自动扫描 47 种数据类型、引导安装 Hermes、配置 LLM 提供商（推荐 BigModel GLM-5）、迁移数据并验证。
+- **`test_e2e.py`** (7 tests)：format-level 验证，每个 adapter 产物符合目标 schema
+- **`test_e2e_live.py`** (11 tests)：**真实子进程执行**，例如实际跑 `opencode models` 验证迁移的 config 被 OpenCode 识别
 
-**场景 B: 导出 Claude.ai 对话**
+## 目标框架支持矩阵
 
-```bash
-# 先去 https://claude.ai/settings/data-privacy-controls 点 Export
-# 等邮件拿到 ZIP
-claude
-> /chat-migration /path/to/export.zip
-```
+| 目标 | 项目上下文 | MCP | 记忆/技能 | 会话恢复 | 已验证 |
+|------|-----------|-----|----------|---------|-------|
+| **Hermes Agent** | CLAUDE.md 原生 + `.hermes.md` | `config.yaml custom_providers` | `~/.hermes/memories/` + skills/cc-* | ✅ SQLite FTS5 `state.db` | ✅ |
+| **OpenCode** | AGENTS.md + CLAUDE.md 原生 | `opencode.json mcp` (local/remote) | `.opencode/agents` + `cc-*` skills | `opencode export/import` | ✅ 真机验证 |
+| **Cursor** | AGENTS.md + `.cursor/rules/*.mdc` | `.cursor/mcp.json` | rules 系统 | ❌ 无会话恢复 | ✅ schema |
+| **Windsurf** | `.windsurfrules` + `.windsurf/rules/` | `mcp_config.json` (serverUrl) | rules 系统 | ❌ 无会话恢复 | ✅ schema |
+| **neuDrive Hub** | `/memory/profile/*` | `/agent/vault/` | `/conversations/{platform}/` | `hermes --resume` via MCP | ✅ |
 
-**场景 C: 团队空间迁移（需要 admin 权限）**
+## BigModel GLM-5（推荐配置）
 
-```bash
-claude
-> /cowork-migration
-# admin 登录 → 导出团队数据 → skill 按成员分目录
-```
-
-**场景 D: 通过 neuDrive 中转多 Agent**
-
-```bash
-# 先跑任意一个来源 skill
-claude
-> /hermes-migration       # 或 /chat-migration, /cowork-migration
-> /neudrive-sync          # 推送到 neuDrive hub
-
-# 然后在 Cursor / Codex / Kimi 等任意 Agent 配置 MCP 接入:
-# {"mcpServers": {"neudrive": {"type":"http", "url":"https://www.neudrive.ai/mcp", "headers":{"Authorization":"Bearer ndt_xxx"}}}}
-```
-
-### 原 Skill 保留功能
-
-`/hermes-migration` 的完整迁移流程（不因上面的生态调整而改变）：
-
-1. **Phase 0** — 读取 Claude Code 最新文档，自检映射表是否需要更新
-2. **Phase 1** — 检查环境依赖（Python 3.11+, ripgrep, git）
-3. **Phase 2** — 深度扫描所有 Claude Code 数据（47 种）
-4. **Phase 3** — 引导安装 Hermes Agent
-5. **Phase 4** — 配置 LLM 提供商（推荐 BigModel，也支持 OpenAI/Anthropic/DeepSeek/Ollama）
-6. **Phase 5** — 迁移所有数据（含 SQLite 会话导入、Skill 格式转换）
-7. **Phase 6-8** — 生成 SOUL.md、验证、输出报告
-
-## 迁移覆盖范围
-
-✅ **47+ 种 Claude Code 数据类型**，基于对 [Claude Code 官方文档](https://code.claude.com/docs/en/overview) 全部 63 页的完整审计：
-
-### 🔴 关键数据（必须迁移）
-
-- `~/.claude.json` — 核心状态文件（含全局 MCP + 项目配置 + OAuth）
-- `CLAUDE.md` + `.claude/CLAUDE.md` + `CLAUDE.local.md` — 项目上下文
-- 项目 Memory（`~/.claude/projects/*/memory/`）
-- 聊天记录（JSONL → SQLite FTS5 全文索引）
-- 子 Agent 记录（`subagents/*.jsonl`）
-- 自定义 Agents（`.claude/agents/*.md`）
-- 全局 + 项目级 Skills（`SKILL.md` / `skill.md` / `*.skill` ZIP）
-- Hooks 配置（PostToolUse / SessionStart 等 27 种事件）
-- `.mcp.json` — 项目级 MCP Server
-- `rules/*.md` — 路径范围规则
-- `agent-memory/` — 子 agent 持久记忆
-- `output-styles/` — 自定义输出格式
-- `scheduled-tasks/` — 定时任务
-- `teams/` + `tasks/` — Agent Teams
-- `channels/` — Channel 凭证（Telegram/Discord）
-- `.credentials.json` — 插件敏感凭证
-- ...更多，[见完整映射表](./skills/hermes-migration/SKILL.md#claude-code-数据全景--hermes-映射表)
-
-### 🟡 重要数据（建议迁移）
-
-- 全局/项目设置（settings.json + settings.local.json）
-- Prompt 历史（`~/.claude/history.jsonl`）
-- Todo 列表 + 计划文件
-- 插件列表 + Launch 配置
-
-### ⚪ 可选数据（归档）
-
-- Shell 快照、Session 元数据、统计缓存、文件历史、Backups
-
-## 关键特性
-
-### Phase 0: 自检与自更新
-
-每次迁移前，Skill 会：
-1. 读取 `code.claude.com/docs/llms.txt` 获取最新文档索引
-2. 对比文档中的数据路径 vs 自身映射表
-3. 如发现遗漏或变化，**自动修改 SKILL.md** 再执行迁移
-
-这样即使 Claude Code 下周新增数据类型，Skill 也会自动发现并补齐。
-
-### 三层 Skill 兼容性处理
-
-- **Frontmatter 转换**: `allowed-tools` → `metadata.hermes.requires_toolsets`
-- **硬编码路径替换**: `~/.claude/skills/` → `~/.hermes/skills/cc-`
-- **工具名映射**: `WebSearch` → `web_search`, `AskUserQuestion` → `clarify` 等
-
-### 数据无损
-
-- 绝不修改或删除任何 Claude Code 原文件
-- 随时可切回 Claude Code，所有原始数据保留
-- Hermes 原生读取 `CLAUDE.md`（优先级 3），所以即使不迁移也能工作
-
-### 安全处理
-
-- API Key 只写入 `~/.hermes/.env`，不出现在其他配置文件
-- 扫描 `settings.local.json` 中嵌入的明文密钥（如 Supabase/飞书/钉钉 token），提醒安全迁移
-- 检测 `~/.claude.json` 的 MCP `headers.Authorization` 中的 Bearer Token
-
-## 🔥 推荐：BigModel 智谱 AI（GLM-5）
-
-**Claude 账号风险场景下最稳妥的替代方案**：
-
-- **注册地址**: https://open.bigmodel.cn/
-- **新账号福利**: 注册即送 2000万 tokens 免费额度（无需信用卡）
-- **API Key 管理**: https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys
-- **推荐模型**: `glm-5`（智谱最新旗舰，性能对标 Claude Opus / GPT-5，原生支持 Agent 与工具调用）
-- **备选**: `glm-4.6`（对标 Sonnet 4，更便宜）
-- **OpenAI 兼容**: 直接用 `OPENAI_API_KEY` 环境变量即可
-
-### 预设配置（Skill 自动填充，用户无需手动输入）
+- 注册：https://open.bigmodel.cn/ （新账号送 2000 万 tokens 免费额度）
+- API key 管理：https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys
+- 适配器自动生成对应 provider 配置：
 
 ```yaml
-# ~/.hermes/config.yaml (BigModel 预设)
-model:
-  provider: custom
-  model_name: glm-5
+# Hermes (config.yaml)
+model: { provider: custom, model_name: glm-5 }
 custom_providers:
   bigmodel:
     base_url: https://open.bigmodel.cn/api/paas/v4
     api_key: ${OPENAI_API_KEY}
 ```
 
----
-
-## 迁移后使用 Hermes
-
-```bash
-cd /path/to/your-project
-export OPENAI_API_KEY="your-bigmodel-key"  # 从 https://open.bigmodel.cn/ 获取
-hermes
+```json
+// OpenCode (opencode.json)
+{
+  "model": "bigmodel/glm-5",
+  "provider": {
+    "bigmodel": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://open.bigmodel.cn/api/paas/v4",
+        "apiKey": "{env:GLM_API_KEY}"
+      }
+    }
+  }
+}
 ```
 
-Hermes 会自动加载：
-- `CLAUDE.md` → 项目指南（优先级 3）
-- `.hermes.md` → 迁移的项目记忆（优先级 1，最高）
-- `~/.hermes/memories/USER.md` → 用户画像
-- `~/.hermes/memories/MEMORY.md` → 项目记忆索引
-- `~/.hermes/skills/cc-*` → 迁移的技能
+## Claude Code Skills（备选）
 
-使用 `hermes --resume <session_id>` 恢复任意历史会话，或 `session_search` 工具全文搜索。
+如果不想装 Python，skills 版本提供同等能力（通过 Claude Code 内驱动）：
 
-## 工具对应关系
+```bash
+mkdir -p ~/.claude/skills
+cp -r skills/* ~/.claude/skills/
+```
 
-| Claude Code | Hermes Agent | 兼容性 |
-|---|---|---|
-| `bash` | `terminal` | ✅ 直接对应 |
-| `Read` | `read_file` | ✅ 名称相同 |
-| `Edit` | `patch` | ✅ 直接对应 |
-| `Write` | (via `terminal`) | ⚠️ 通过 shell |
-| `Glob` | (via `terminal`) | ⚠️ 通过 find |
-| `Grep` | (via `terminal`) | ⚠️ 通过 rg |
-| `WebSearch` | `web_search` | ✅ 直接对应 |
-| `WebFetch` | `web_extract` | ✅ 直接对应 |
-| `TodoWrite` | `todo` | ✅ 直接对应 |
-| `AskUserQuestion` | `clarify` | ✅ 直接对应 |
-| `Agent` | `delegate_task` | ✅ 直接对应 |
+然后在 Claude Code 里：
 
-## 文档
+```
+/claude-full-migration      # meta-skill，编排 4 个子 skill
+/code-migration             # 多目标泛化
+/hermes-migration           # Hermes 专用
+/chat-migration             # Claude.ai 官方 ZIP 解析
+/cowork-migration           # 团队 workspace
+/neudrive-sync              # 推送到 neuDrive Hub
+```
 
-- [完整 SKILL.md](./skills/hermes-migration/SKILL.md) — 迁移流程与数据映射表
-- [Hermes Agent 官网](https://hermes-agent.nousresearch.com/) — Hermes 文档
-- [Claude Code 文档](https://code.claude.com/docs/en/overview) — Claude Code 官方文档
+## 验证过的真实项目
+
+在两个数据特征不同的项目上做过真实端到端测试：
+
+**OpenClaw Course**（CLAUDE.md+memory+skills+sessions 场景）
+- 5 memory files, 4 sessions, 18 subagents, 48 global skills, 1 MCP Bearer token
+- Hermes: SQLite state.db imported 5 sessions + 133 messages, FTS5 "OpenClaw" 25 hits
+- OpenCode: 55 files including all skills with cc- prefix
+
+**IdeaToProd**（hooks+`.mcp.json`+env+launch 场景）
+- 1 session (106 messages), Linear MCP via `.mcp.json`, PostToolUse hooks
+- OpenCode 真实运行：`opencode models` 输出含 `bigmodel/glm-5`，`opencode mcp list` 显示 `cc-web-search-prime` 和 `cc-proj-linear` 都被加载
+
+## 安全
+
+1. **密钥不明文**：所有 MCP headers 中的 Bearer token 在输出里都替换为各目标的 env 引用（`${OPENAI_API_KEY}` / `{env:VAR}` / `${env:VAR}`）
+2. **测试断言**：`test_all_targets_zero_plaintext_secrets` 扫描每个 adapter 的每个输出文件，断言无 secret 值泄漏
+3. **项目不被污染**：默认 staging 模式，需要 `--in-place` 显式才写真实项目
+
+## 参考链接
+
+- neuDrive: https://github.com/agi-bar/neuDrive
+- Hermes Agent: https://github.com/nousresearch/hermes-agent
+- OpenCode: https://github.com/sst/opencode
+- Claude Code 文档: https://code.claude.com/docs/en/overview
 
 ## License
 
