@@ -228,18 +228,120 @@
   }
   .copy-btn:hover { color: var(--text); border-color: var(--text-mute); }
 
-  /* Diagram */
-  .diagram {
+  /* Ecosystem SVG Diagram */
+  .eco-diagram {
     background: var(--bg-soft);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 32px;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    line-height: 1.8;
-    color: var(--text-dim);
-    white-space: pre;
+    border-radius: 12px;
+    padding: 20px 12px;
     overflow-x: auto;
+  }
+  .eco-diagram svg { width: 100%; height: auto; min-width: 720px; display: block; }
+
+  /* Lane labels */
+  .eco-lane-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    fill: var(--text-mute);
+    font-weight: 500;
+  }
+
+  /* Nodes */
+  .eco-rect {
+    fill: var(--bg-card);
+    stroke: var(--border);
+    stroke-width: 1;
+    transition: all 150ms;
+  }
+  .eco-source .eco-rect { stroke: rgba(217,119,87,0.35); }
+  .eco-target .eco-rect { stroke: rgba(230,230,239,0.15); }
+  .eco-node:hover .eco-rect { stroke: var(--accent); stroke-width: 1.5; }
+
+  .eco-rect-hub {
+    fill: #1f1a17;
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+
+  .eco-emoji, .eco-hub-emoji {
+    font-size: 20px;
+    dominant-baseline: middle;
+  }
+  .eco-hub-emoji { font-size: 26px; }
+
+  .eco-title {
+    fill: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    dominant-baseline: middle;
+  }
+  .eco-sub {
+    fill: var(--text-mute);
+    font-size: 11px;
+    font-family: var(--mono);
+    dominant-baseline: middle;
+  }
+  .eco-hub-title {
+    fill: var(--accent);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    dominant-baseline: middle;
+  }
+  .eco-hub-sub {
+    fill: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--mono);
+    dominant-baseline: middle;
+  }
+
+  .eco-target-title {
+    fill: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    dominant-baseline: middle;
+  }
+  .eco-target-sub {
+    fill: var(--text-mute);
+    font-size: 10px;
+    font-family: var(--mono);
+    dominant-baseline: middle;
+  }
+  .eco-target-ghost .eco-rect { fill: transparent; }
+  .eco-target-ghost .eco-target-title { fill: var(--text-mute); font-size: 20px; }
+
+  /* Connections */
+  .eco-line {
+    fill: none;
+    stroke: rgba(230,230,239,0.2);
+    stroke-width: 1.5;
+  }
+  .eco-line-accent {
+    fill: none;
+    stroke: rgba(217,119,87,0.35);
+    stroke-width: 1.5;
+  }
+
+  /* Edge labels */
+  .eco-edge-label {
+    fill: var(--text-mute);
+    font-family: var(--mono);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+  .eco-edge-center {
+    font-size: 11px;
+    fill: var(--accent);
+    font-weight: 500;
+  }
+
+  .eco-caption {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 24px;
+    text-align: center;
+    line-height: 1.6;
   }
 
   /* Footer */
@@ -435,22 +537,132 @@ custom_providers:
       <h2 class="section-title">生态全景</h2>
       <p class="section-sub">不做 n×m 点对点迁移，通过 neuDrive 做 n→1→m 中心化枢纽：一次导出，任意 Agent 消费。</p>
     </div>
-<div class="diagram">用户 → /claude-full-migration
-           ↓ (自动编排)
-   ┌───────┼───────┐
-   ↓       ↓       ↓
- Chat    Cowork   Code
-(claude.ai)(Teams)(~/.claude)
-   ↓       ↓       ↓
-   └───────┼───────┘
-           ↓
-     /neudrive-sync
-           ↓
-       neuDrive Hub
-           ↓ (MCP)
-   ┌───────┼───────┬───────┐
-   ↓       ↓       ↓       ↓
- Hermes  Cursor   Codex   Kimi/飞书/Gemini</div>
+
+    <div class="eco-diagram">
+      <svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="生态迁移流程图">
+        <defs>
+          <!-- 箭头 marker -->
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(230,230,239,0.4)"/>
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97757"/>
+          </marker>
+
+          <!-- Hub 光晕 -->
+          <radialGradient id="hubGlow">
+            <stop offset="0%" stop-color="#d97757" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#d97757" stop-opacity="0"/>
+          </radialGradient>
+
+          <!-- 节点通用样式（CSS 也可以） -->
+          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+          </filter>
+        </defs>
+
+        <!-- ─── 分层标签 ─── -->
+        <text x="20" y="45" class="eco-lane-label">SOURCES</text>
+        <text x="20" y="280" class="eco-lane-label">HUB</text>
+        <text x="20" y="495" class="eco-lane-label">TARGETS</text>
+
+        <!-- ─── 顶部：3 个 Source 节点 ─── -->
+        <!-- Claude.ai Chat -->
+        <g class="eco-node eco-source" transform="translate(140,30)">
+          <rect width="180" height="72" rx="10" class="eco-rect"/>
+          <text x="16" y="28" class="eco-emoji">💬</text>
+          <text x="52" y="32" class="eco-title">Claude.ai Chat</text>
+          <text x="52" y="52" class="eco-sub">conversations.json</text>
+        </g>
+        <!-- Claude Cowork -->
+        <g class="eco-node eco-source" transform="translate(390,30)">
+          <rect width="180" height="72" rx="10" class="eco-rect"/>
+          <text x="16" y="28" class="eco-emoji">👥</text>
+          <text x="52" y="32" class="eco-title">Claude Cowork</text>
+          <text x="52" y="52" class="eco-sub">Team Workspace</text>
+        </g>
+        <!-- Claude Code -->
+        <g class="eco-node eco-source" transform="translate(640,30)">
+          <rect width="180" height="72" rx="10" class="eco-rect"/>
+          <text x="16" y="28" class="eco-emoji">💻</text>
+          <text x="52" y="32" class="eco-title">Claude Code</text>
+          <text x="52" y="52" class="eco-sub">~/.claude/ · 47 types</text>
+        </g>
+
+        <!-- ─── 连接线：Sources → Hub ─── -->
+        <path d="M 230 102 C 230 170, 420 190, 480 230" class="eco-line" marker-end="url(#arrow)"/>
+        <path d="M 480 102 L 480 230" class="eco-line" marker-end="url(#arrow)"/>
+        <path d="M 730 102 C 730 170, 540 190, 480 230" class="eco-line" marker-end="url(#arrow)"/>
+
+        <!-- sync 标签 -->
+        <text x="300" y="180" class="eco-edge-label">/chat-migration</text>
+        <text x="420" y="170" class="eco-edge-label">/cowork-migration</text>
+        <text x="590" y="180" class="eco-edge-label">/code-migration</text>
+
+        <!-- ─── 中心：neuDrive Hub ─── -->
+        <circle cx="480" cy="300" r="90" fill="url(#hubGlow)"/>
+        <g class="eco-node eco-hub" transform="translate(360,260)">
+          <rect width="240" height="80" rx="12" class="eco-rect-hub" filter="url(#shadow)"/>
+          <text x="20" y="32" class="eco-hub-emoji">🔱</text>
+          <text x="54" y="34" class="eco-hub-title">neuDrive Hub</text>
+          <text x="54" y="55" class="eco-hub-sub">identity · memory · vault · MCP</text>
+        </g>
+
+        <!-- ─── 连接线：Hub → Targets ─── -->
+        <path d="M 400 340 C 350 400, 200 420, 130 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 440 340 C 420 400, 340 420, 290 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 470 340 C 470 400, 465 425, 450 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 490 340 C 500 400, 560 425, 610 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 520 340 C 540 400, 700 420, 770 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+        <path d="M 560 340 C 610 400, 850 420, 920 450" class="eco-line-accent" marker-end="url(#arrow-accent)"/>
+
+        <!-- MCP 标签（中间位置） -->
+        <text x="480" y="395" class="eco-edge-label eco-edge-center">via MCP</text>
+
+        <!-- ─── 底部：6 个 Target 节点 ─── -->
+        <!-- Hermes -->
+        <g class="eco-node eco-target" transform="translate(60,450)">
+          <rect width="140" height="62" rx="8" class="eco-rect"/>
+          <text x="70" y="28" class="eco-target-title" text-anchor="middle">🔱 Hermes</text>
+          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">Nous Research</text>
+        </g>
+        <!-- Cursor -->
+        <g class="eco-node eco-target" transform="translate(220,450)">
+          <rect width="140" height="62" rx="8" class="eco-rect"/>
+          <text x="70" y="28" class="eco-target-title" text-anchor="middle">✎ Cursor</text>
+          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">.cursor/rules</text>
+        </g>
+        <!-- Codex -->
+        <g class="eco-node eco-target" transform="translate(380,450)">
+          <rect width="140" height="62" rx="8" class="eco-rect"/>
+          <text x="70" y="28" class="eco-target-title" text-anchor="middle">◎ Codex CLI</text>
+          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">~/.codex/config.toml</text>
+        </g>
+        <!-- Gemini -->
+        <g class="eco-node eco-target" transform="translate(540,450)">
+          <rect width="140" height="62" rx="8" class="eco-rect"/>
+          <text x="70" y="28" class="eco-target-title" text-anchor="middle">✦ Gemini CLI</text>
+          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">~/.gemini/settings.json</text>
+        </g>
+        <!-- Windsurf / Copilot -->
+        <g class="eco-node eco-target" transform="translate(700,450)">
+          <rect width="140" height="62" rx="8" class="eco-rect"/>
+          <text x="70" y="28" class="eco-target-title" text-anchor="middle">⚡ Windsurf</text>
+          <text x="70" y="48" class="eco-target-sub" text-anchor="middle">Copilot · Kimi · 飞书</text>
+        </g>
+        <!-- 未来扩展 -->
+        <g class="eco-node eco-target eco-target-ghost" transform="translate(860,450)">
+          <rect width="80" height="62" rx="8" class="eco-rect" stroke-dasharray="4,3"/>
+          <text x="40" y="32" class="eco-target-title" text-anchor="middle">+</text>
+          <text x="40" y="50" class="eco-target-sub" text-anchor="middle">more</text>
+        </g>
+      </svg>
+    </div>
+
+    <p class="eco-caption">
+      <strong style="color:var(--text)">n → 1 → m</strong>：3 个 Claude 数据源 × 1 个中心化枢纽 × N 个目标 Agent。
+      切换任意 Agent 时不需要重新迁移，接 neuDrive MCP endpoint 即可。
+    </p>
   </div>
 </section>
 
