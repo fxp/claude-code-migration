@@ -11,8 +11,29 @@ from typing import Any
 from ..canonical import (
     CanonicalData, Identity, Memory, MemoryItem, Rule,
     Skill, Agent, McpEndpoint, Plugin, Marketplace, Hook, ScheduledTask, Project,
+    Conversation, Message,
 )
 from ..scanner import scan_claude_code
+
+
+def _extract_text(content: Any) -> str:
+    """Claude Code JSONL content is either a string or a list of {type, text, ...} blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for b in content:
+            if isinstance(b, dict):
+                if b.get("type") == "text":
+                    parts.append(b.get("text", ""))
+                elif b.get("type") == "tool_use":
+                    parts.append(f"[tool_use {b.get('name','')} id={b.get('id','')}]")
+                elif b.get("type") == "tool_result":
+                    parts.append(f"[tool_result id={b.get('tool_use_id','')}]")
+                elif b.get("type") == "thinking":
+                    parts.append(f"[thinking] {b.get('thinking','')}")
+        return "\n".join(p for p in parts if p)
+    return ""
 
 
 def parse(project_dir: str | Path | None = None,
@@ -190,6 +211,32 @@ def parse(project_dir: str | Path | None = None,
             frontmatter=fm,
         ))
 
+    # Sessions → Conversations (chat history)
+    for s in d.get("sessions") or []:
+        msgs: list[Message] = []
+        for raw in s.get("messages") or []:
+            m = raw.get("message") or raw
+            role = m.get("role") or raw.get("type") or ""
+            if role not in ("user", "assistant", "system", "tool"):
+                # Claude Code uses "type":"user"/"assistant"/"summary"/"system"
+                t = raw.get("type")
+                if t in ("user", "assistant", "system"):
+                    role = t
+                else:
+                    continue
+            msgs.append(Message(
+                uuid=str(raw.get("uuid") or m.get("id") or ""),
+                role=role,
+                content=_extract_text(m.get("content")),
+                timestamp=str(raw.get("timestamp") or ""),
+            ))
+        ir.conversations.append(Conversation(
+            uuid=s.get("uuid", ""),
+            title=f"claude-code session {s.get('uuid','')[:8]}",
+            messages=msgs,
+            source_platform="claude-code",
+        ))
+
     # Settings (preserve opaque parts)
     ir.settings = {
         "global": d.get("settings_global") or {},
@@ -200,6 +247,30 @@ def parse(project_dir: str | Path | None = None,
         "plugins_installed": d.get("plugins_installed"),
         "history_count": d.get("history_count", 0),
         "worktreeinclude": d.get("worktreeinclude") or [],
+    }
+
+    # Lossless preservation of everything else we don't canonicalize
+    ir.raw_archive = {
+        "history": d.get("history") or [],
+        "plans": d.get("plans") or [],
+        "todos": d.get("todos") or [],
+        "project_state": d.get("project_state") or {},
+        "dot_claude_meta": d.get("dot_claude_meta") or {},
+        "shell_snapshots": d.get("shell_snapshots") or [],
+        "session_envs": d.get("session_envs") or [],
+        "file_history": d.get("file_history") or [],
+        "mcp_needs_auth": d.get("mcp_needs_auth") or {},
+        # Session sidecars aren't fully captured by conversations (tool-results map
+        # + subagent transcripts are needed to fully reconstruct tool-call chains).
+        "session_sidecars": [
+            {
+                "uuid": s.get("uuid"),
+                "subagents": s.get("subagents") or [],
+                "tool_results": s.get("tool_results") or {},
+            }
+            for s in (d.get("sessions") or [])
+            if (s.get("subagents") or s.get("tool_results"))
+        ],
     }
 
     return ir

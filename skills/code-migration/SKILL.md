@@ -3,7 +3,7 @@ name: code-migration
 version: 1.0.0
 description: |
   把 Claude Code 项目数据迁移到任意 Agent 平台 —— Hermes / Cursor / Codex / Windsurf / Gemini CLI / Copilot。
-  从 hermes-migration 演化而来，扫描逻辑完全相同（47 种数据类型），但输出适配器可切换。
+  从 hermes-migration 演化而来，扫描逻辑完全相同（60+ 种数据类型），但输出适配器可切换。
   当用户说"迁移到cursor"、"迁移到codex"、"code migration"、"multi-target migration"、"换到其他Agent"时触发。
 allowed-tools:
   - Bash
@@ -21,10 +21,10 @@ allowed-tools:
 
 **多目标**迁移 — 把 Claude Code 本地数据（`~/.claude/` + 项目 `.claude/`）适配到任意 Agent 平台。
 
-本 skill 是 `hermes-migration` v4.0 的泛化版本。扫描阶段完全沿用（47 种数据类型），输出阶段替换为目标侧的**适配器**：
+本 skill 是 `hermes-migration` v4.0 的泛化版本。扫描阶段完全沿用（60+ 种数据类型），输出阶段替换为目标侧的**适配器**：
 
 ```
-        Claude Code Scanner (47 types)
+        Claude Code Scanner (60+ types)
                   │
                   ▼
        ┌──────────┼──────────┬──────────┬───────────┬─────────┐
@@ -67,7 +67,7 @@ allowed-tools:
 
 每次迁移前必须执行：
 
-1. **拉 Claude Code 最新文档** — 确认源端 47 种数据类型是否有变化
+1. **拉 Claude Code 最新文档** — 确认源端 60+ 种数据类型是否有变化
    - `WebFetch https://code.claude.com/docs/llms.txt`
    - 对比本 skill 的扫描清单，有变化则用 Edit 修改
 
@@ -98,7 +98,7 @@ CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 ---
 
-### Phase 2: 扫描 Claude Code 数据（47 种）
+### Phase 2: 扫描 Claude Code 数据（60+ 种）
 
 **完全沿用** `hermes-migration` v4.0 的扫描逻辑。此处不重复，直接 delegate：
 

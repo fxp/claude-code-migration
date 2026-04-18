@@ -65,6 +65,35 @@ class Session:
     path: str
     size_bytes: int
     line_count: int
+    messages: list[dict[str, Any]] = field(default_factory=list)  # parsed JSONL entries
+    subagents: list[dict[str, Any]] = field(default_factory=list)  # from <session>/subagents/
+    tool_results: dict[str, str] = field(default_factory=dict)     # toolu_id → payload
+
+
+@dataclass
+class ShellSnapshot:
+    path: str
+    size_bytes: int
+    mtime: str
+    content: str = ""
+
+
+@dataclass
+class SessionEnv:
+    """One session-env bundle — ~/.claude/session-env/<uuid>/"""
+    session_uuid: str
+    path: str
+    files: dict[str, str] = field(default_factory=dict)  # filename → content
+
+
+@dataclass
+class FileHistoryEntry:
+    """~/.claude/file-history/<uuid>/<hash>@v<n> — Edit-tool file snapshots."""
+    session_uuid: str
+    file_id: str                 # <hash>@v<n>
+    path: str
+    size_bytes: int
+    content: str = ""
 
 
 @dataclass
@@ -193,7 +222,17 @@ class ClaudeScan:
     org: OrgMetadata | None = None
     scheduled_tasks: list[dict[str, Any]] = field(default_factory=list)  # ~/.claude/scheduled-tasks/
     history_count: int = 0
+    history: list[dict[str, Any]] = field(default_factory=list)  # parsed ~/.claude/history.jsonl entries
     worktreeinclude: list[str] = field(default_factory=list)
+    # Per-project nested state from ~/.claude.json["projects"][path]
+    project_state: dict[str, Any] = field(default_factory=dict)
+    # Top-level ~/.claude.json keys we deliberately preserve (not settings.json)
+    dot_claude_meta: dict[str, Any] = field(default_factory=dict)
+    # Environment reproduction
+    shell_snapshots: list[ShellSnapshot] = field(default_factory=list)
+    session_envs: list[SessionEnv] = field(default_factory=list)
+    file_history: list[FileHistoryEntry] = field(default_factory=list)
+    mcp_needs_auth: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         # Convert McpServer objects in dicts
@@ -290,6 +329,9 @@ def scan_claude_code(
     project_dir: str | Path | None = None,
     include_sessions: bool = True,
     include_agent_memory: bool = True,
+    include_session_bodies: bool = True,
+    include_env_reproduction: bool = True,
+    max_session_body_mb: int = 32,
 ) -> ClaudeScan:
     """Scan Claude Code data on disk.
 
@@ -297,6 +339,12 @@ def scan_claude_code(
         project_dir: Optional project to focus on. If None, scans globally.
         include_sessions: Whether to enumerate JSONL session files.
         include_agent_memory: Whether to scan agent-memory dirs.
+        include_session_bodies: Read JSONL message bodies + subagents/ + tool-results/.
+            Setting False keeps legacy metadata-only behavior.
+        include_env_reproduction: Scan shell-snapshots, session-env, file-history,
+            mcp-needs-auth-cache so the migrated agent can reproduce the shell env.
+        max_session_body_mb: Per-file size cap for session/history/snapshot bodies
+            to avoid loading multi-GB artifacts.
     """
     from datetime import datetime, timezone
 
@@ -320,6 +368,33 @@ def scan_claude_code(
         for name, cfg in (d.get("mcpServers") or {}).items():
             if isinstance(cfg, dict):
                 scan.mcp_servers_global[name] = _parse_mcp_server(name, cfg)
+
+        # Top-level meta worth preserving (usage, tips, flags that affect UX).
+        # Skip opaque/ephemeral caches and feature-flag cruft.
+        _META_KEYS = (
+            "skillUsage", "toolUsage", "clientDataCache",
+            "customApiKeyResponses", "tipsHistory", "promptQueueUseCount",
+            "githubRepoPaths", "feedbackSurveyState",
+            "hasCompletedOnboarding", "hasSeenTasksHint", "hasSeenStashHint",
+            "installMethod", "autoUpdates", "userID", "anonymousId",
+            "firstStartTime", "claudeCodeFirstTokenDate",
+        )
+        scan.dot_claude_meta = {k: d[k] for k in _META_KEYS if k in d}
+
+        # Per-project state: allowedTools, mcpContextUris, enabledMcpjsonServers,
+        # disabledMcpjsonServers, hasTrustDialogAccepted, exampleFiles, lastSessionId,
+        # lastCost / lastAPIDuration / token counters, etc.
+        proj_state = d.get("projects") or {}
+        if proj:
+            # Exact path match first, then case-insensitive fallback
+            key = str(proj)
+            if key in proj_state:
+                scan.project_state = dict(proj_state[key])
+            else:
+                for k in proj_state:
+                    if k.lower() == key.lower():
+                        scan.project_state = dict(proj_state[k])
+                        break
 
         # oauthAccount → OrgMetadata (Cowork indicator)
         oauth = d.get("oauthAccount") or {}
@@ -346,18 +421,28 @@ def scan_claude_code(
     # Global loop.md
     scan.loop_md_global = _read_safe(claude_home / "loop.md")
 
-    # Global plans / todos (counts only — can be large)
+    # Global plans — read full body (small markdown files)
     plans_dir = claude_home / "plans"
     if plans_dir.is_dir():
         for f in plans_dir.glob("*.md"):
-            scan.plans.append({"name": f.name, "path": str(f), "size": str(f.stat().st_size)})
+            scan.plans.append({
+                "name": f.name,
+                "path": str(f),
+                "size": str(f.stat().st_size),
+                "content": _read_safe(f) or "",
+            })
+    # Global todos — keep full item list so migration preserves pending work
     todos_dir = claude_home / "todos"
     if todos_dir.is_dir():
         for f in todos_dir.glob("*.json"):
             try:
-                d = json.loads(f.read_text())
-                if d:  # non-empty
-                    scan.todos.append({"path": str(f), "count": len(d) if isinstance(d, list) else 1})
+                items = json.loads(f.read_text())
+                if items:
+                    scan.todos.append({
+                        "path": str(f),
+                        "count": len(items) if isinstance(items, list) else 1,
+                        "items": items,
+                    })
             except Exception:
                 pass
 
@@ -367,6 +452,15 @@ def scan_claude_code(
     if plugins_file.exists():
         scan.plugins_installed = _load_json_safe(plugins_file)
         _scan_plugins(plugins_dir, scan)
+
+    # MCP OAuth-required cache — tells the target agent which plugins still need auth
+    mcp_auth_cache = claude_home / "mcp-needs-auth-cache.json"
+    if mcp_auth_cache.exists():
+        scan.mcp_needs_auth = _load_json_safe(mcp_auth_cache)
+
+    # Environment reproduction (shell snapshots, session-env, file-history)
+    if include_env_reproduction:
+        _scan_env_reproduction(claude_home, scan, max_session_body_mb)
 
     # Scheduled tasks — ~/.claude/scheduled-tasks/<name>/SKILL.md
     sched_dir = claude_home / "scheduled-tasks"
@@ -384,10 +478,23 @@ def scan_claude_code(
                         "body": body,
                     })
 
-    # history.jsonl (count only)
+    # history.jsonl — full prompt history so migrated agent can seed command history
     hist = claude_home / "history.jsonl"
     if hist.exists():
-        scan.history_count = sum(1 for _ in hist.open(encoding="utf-8", errors="replace"))
+        cap_bytes = max_session_body_mb * 1024 * 1024
+        if hist.stat().st_size <= cap_bytes:
+            with hist.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    scan.history_count += 1
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        scan.history.append(json.loads(line))
+                    except Exception:
+                        scan.history.append({"raw": line})
+        else:
+            scan.history_count = sum(1 for _ in hist.open(encoding="utf-8", errors="replace"))
 
     # Global skills
     global_skills_dir = claude_home / "skills"
@@ -506,19 +613,17 @@ def scan_claude_code(
         if mem_root.is_dir():
             scan.memory.extend(_scan_memory_dir(mem_root))
 
-        # Sessions (JSONL files)
+        # Sessions (JSONL files) — body + subagents + tool-results when requested
         if include_sessions:
             encoded = _encoded_project_key(proj)
             proj_global_dir = claude_home / "projects" / encoded
             if proj_global_dir.is_dir():
+                cap_bytes = max_session_body_mb * 1024 * 1024
                 for jsonl in proj_global_dir.glob("*.jsonl"):
-                    line_count = sum(1 for _ in jsonl.open(encoding="utf-8", errors="replace"))
-                    scan.sessions.append(Session(
-                        uuid=jsonl.stem,
-                        path=str(jsonl),
-                        size_bytes=jsonl.stat().st_size,
-                        line_count=line_count,
-                    ))
+                    sess = _scan_session(jsonl, proj_global_dir,
+                                        include_bodies=include_session_bodies,
+                                        cap_bytes=cap_bytes)
+                    scan.sessions.append(sess)
 
     return scan
 
@@ -605,6 +710,123 @@ def _scan_plugins(plugins_dir: Path, scan: ClaudeScan) -> None:
                                 scan.plugins_skills.append(s)
 
             scan.plugins.append(p)
+
+
+def _scan_session(jsonl: Path, proj_global_dir: Path,
+                  include_bodies: bool, cap_bytes: int) -> Session:
+    """Parse one session: JSONL body, sidecar subagents/ and tool-results/."""
+    size = jsonl.stat().st_size
+    line_count = 0
+    messages: list[dict[str, Any]] = []
+    if include_bodies and size <= cap_bytes:
+        with jsonl.open(encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line_count += 1
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    messages.append(json.loads(line))
+                except Exception:
+                    messages.append({"raw": line})
+    else:
+        line_count = sum(1 for _ in jsonl.open(encoding="utf-8", errors="replace"))
+
+    sess = Session(
+        uuid=jsonl.stem,
+        path=str(jsonl),
+        size_bytes=size,
+        line_count=line_count,
+        messages=messages,
+    )
+
+    if include_bodies:
+        # Sidecar dir: projects/<enc>/<session-uuid>/ {subagents,tool-results}
+        side = proj_global_dir / jsonl.stem
+        if side.is_dir():
+            subagents_dir = side / "subagents"
+            if subagents_dir.is_dir():
+                for meta_file in sorted(subagents_dir.glob("*.meta.json")):
+                    agent_id = meta_file.name[:-len(".meta.json")]
+                    jsonl_file = subagents_dir / f"{agent_id}.jsonl"
+                    meta = _load_json_safe(meta_file)
+                    agent_msgs: list[dict[str, Any]] = []
+                    if jsonl_file.exists() and jsonl_file.stat().st_size <= cap_bytes:
+                        with jsonl_file.open(encoding="utf-8", errors="replace") as fh:
+                            for line in fh:
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                try:
+                                    agent_msgs.append(json.loads(line))
+                                except Exception:
+                                    agent_msgs.append({"raw": line})
+                    sess.subagents.append({
+                        "id": agent_id,
+                        "meta": meta,
+                        "messages": agent_msgs,
+                    })
+
+            tr_dir = side / "tool-results"
+            if tr_dir.is_dir():
+                for tr in tr_dir.glob("toolu_*.txt"):
+                    if tr.stat().st_size > cap_bytes:
+                        continue
+                    sess.tool_results[tr.stem] = _read_safe(tr) or ""
+
+    return sess
+
+
+def _scan_env_reproduction(claude_home: Path, scan: ClaudeScan, max_mb: int) -> None:
+    """Scan shell-snapshots/, session-env/, file-history/ so the migrated agent
+    can reproduce the original Bash-tool environment (PATH, aliases, functions,
+    per-session env vars, file undo history)."""
+    from datetime import datetime, timezone
+
+    cap_bytes = max_mb * 1024 * 1024
+
+    snap_dir = claude_home / "shell-snapshots"
+    if snap_dir.is_dir():
+        for f in snap_dir.glob("snapshot-*.sh"):
+            st = f.stat()
+            content = ""
+            if st.st_size <= cap_bytes:
+                content = _read_safe(f) or ""
+            scan.shell_snapshots.append(ShellSnapshot(
+                path=str(f),
+                size_bytes=st.st_size,
+                mtime=datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+                      .isoformat().replace("+00:00", "Z"),
+                content=content,
+            ))
+
+    senv_dir = claude_home / "session-env"
+    if senv_dir.is_dir():
+        for sub in senv_dir.iterdir():
+            if not sub.is_dir():
+                continue
+            entry = SessionEnv(session_uuid=sub.name, path=str(sub))
+            for f in sub.iterdir():
+                if f.is_file() and f.stat().st_size <= cap_bytes:
+                    entry.files[f.name] = _read_safe(f) or ""
+            scan.session_envs.append(entry)
+
+    fh_dir = claude_home / "file-history"
+    if fh_dir.is_dir():
+        for sub in fh_dir.iterdir():
+            if not sub.is_dir():
+                continue
+            for f in sub.iterdir():
+                if not f.is_file():
+                    continue
+                sz = f.stat().st_size
+                scan.file_history.append(FileHistoryEntry(
+                    session_uuid=sub.name,
+                    file_id=f.name,
+                    path=str(f),
+                    size_bytes=sz,
+                    content=(_read_safe(f) or "") if sz <= cap_bytes else "",
+                ))
 
 
 def save_scan(scan: ClaudeScan, out_path: str | Path) -> None:

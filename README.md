@@ -99,7 +99,7 @@ ccm push-hub --scan ./ccm-output/scan.json \
 
 ```
 src/claude_code_migration/
-├── scanner.py              Claude Code 数据扫描（47 种类型）
+├── scanner.py              Claude Code 数据扫描（60+ 种：含 session 正文、subagents、tool-results、shell-snapshots、file-history、per-project state）
 ├── secrets.py              API Key / Bearer token 检测
 ├── cowork.py               Claude.ai ZIP 解析（2026 schema）
 ├── hub.py                  neuDrive HTTP 客户端（调 API，不拷代码）
@@ -116,11 +116,14 @@ src/claude_code_migration/
 
 ```bash
 pip install pytest
-pytest tests/            # 18 个测试全部通过
+pytest tests/            # 56 个测试全部通过
 ```
 
-- **`test_e2e.py`** (7 tests)：format-level 验证，每个 adapter 产物符合目标 schema
-- **`test_e2e_live.py`** (11 tests)：**真实子进程执行**，例如实际跑 `opencode models` 验证迁移的 config 被 OpenCode 识别
+- **`test_e2e.py`** (7)：format-level 验证
+- **`test_e2e_live.py`** (11)：**真实子进程执行**（`opencode models` 等）
+- **`test_cowork.py`** (12)：插件清单 + org metadata 传播
+- **`test_cowork_full.py`** (13)：Cowork Projects + `_archive` + 不可迁移项
+- **`test_roundtrip.py`** (13)：**任意 source → IR → 任意 target** 互迁
 
 ## 目标框架支持矩阵
 

@@ -159,7 +159,7 @@ print(f"  之前迁移输出: {len(discovery['previous_migration'])} 个")
   包含: Markdown, SQLite FTS5
 
 步骤 2: /hermes-migration
-  扫描: ~/.claude/  (47 种数据)
+  扫描: ~/.claude/  (60+ 种数据)
   输出: ~/.hermes/ (你选的 Hermes 直迁目标)
 
 步骤 3: /neudrive-sync

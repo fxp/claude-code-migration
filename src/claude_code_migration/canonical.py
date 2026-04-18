@@ -325,7 +325,8 @@ class CanonicalData:
                 }
                 for e in self.mcp_endpoints if e.scope == "project"
             },
-            "plugins": [asdict(p) | {"mcp_servers": self._plugin_mcp_dict(p.id)}
+            "plugins": [asdict(p) | {"plugin_name": p.name,
+                                     "mcp_servers": self._plugin_mcp_dict(p.id)}
                         for p in self.plugins],
             "marketplaces": [asdict(m) for m in self.marketplaces],
             "org": asdict(self.identity) if self.identity else None,

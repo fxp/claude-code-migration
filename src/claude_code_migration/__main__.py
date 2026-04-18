@@ -17,7 +17,11 @@ from .sources import SOURCES, get_source
 
 def cmd_scan(args: argparse.Namespace) -> int:
     proj = Path(args.project).resolve() if args.project else None
-    scan = scan_claude_code(project_dir=proj, include_sessions=not args.no_sessions)
+    scan = scan_claude_code(
+        project_dir=proj,
+        include_sessions=not args.no_sessions,
+        max_session_body_mb=args.max_session_mb,
+    )
     d = scan.to_dict()
 
     if args.out:
@@ -42,7 +46,28 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"MCP servers (global): {len(d.get('mcp_servers_global') or {})}")
         print(f"MCP servers (project): {len(d.get('mcp_servers_project') or {})}")
         print(f"Rules: {len(d.get('rules') or [])}")
-        print(f"History entries: {d.get('history_count', 0)}")
+        sess = d.get('sessions') or []
+        msg_total = sum(len(s.get('messages') or []) for s in sess)
+        sub_total = sum(len(s.get('subagents') or []) for s in sess)
+        tr_total = sum(len(s.get('tool_results') or {}) for s in sess)
+        if msg_total or sub_total or tr_total:
+            print(f"Session bodies: {msg_total} msgs, {sub_total} subagents, {tr_total} tool-results")
+        capped = [s for s in sess if s.get('size_bytes', 0) > 32 * 1024 * 1024
+                  and not s.get('messages')]
+        if capped:
+            print(f"  ⚠️  {len(capped)} session(s) exceeded 32MB cap — re-run with "
+                  f"a higher max_session_body_mb to capture:")
+            for s in capped:
+                print(f"    {s['uuid'][:8]}  {s['size_bytes']//1024//1024}MB  lines={s['line_count']}")
+        print(f"History entries: {d.get('history_count', 0)} (parsed: {len(d.get('history') or [])})")
+        print(f"Plans: {len(d.get('plans') or [])}, Todos: {len(d.get('todos') or [])}")
+        print(f"Shell snapshots: {len(d.get('shell_snapshots') or [])}, "
+              f"session-env: {len(d.get('session_envs') or [])}, "
+              f"file-history: {len(d.get('file_history') or [])}")
+        if d.get('project_state'):
+            print(f"Project state keys: {len(d['project_state'])}")
+        if d.get('mcp_needs_auth'):
+            print(f"MCP pending auth: {len(d['mcp_needs_auth'])}")
         secrets = scan_secrets(d)
         print(f"Secrets detected: {len(secrets)}")
         for s in secrets[:5]:
@@ -187,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--project", help="Project dir (default: cwd)")
     sp.add_argument("--out", help="Write scan.json to path")
     sp.add_argument("--no-sessions", action="store_true", help="Skip JSONL session enumeration")
+    sp.add_argument("--max-session-mb", type=int, default=32,
+                    help="Per-file cap for session JSONL body + shell snapshots (default: 32)")
     sp.set_defaults(func=cmd_scan)
 
     # migrate
