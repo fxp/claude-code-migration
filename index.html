@@ -971,19 +971,21 @@ cp -r claude-code-migration/skills/* ~/.claude/skills/</code></pre>
     </div>
 
     <h3 style="margin: 40px 0 12px;font-size:17px;">推荐配 BigModel GLM-5</h3>
-    <p style="color:var(--text-dim);margin-bottom:14px;">
+    <p style="color:var(--text-dim);margin-bottom:8px;">
       <strong>2000 万 tokens 免费额度</strong>，性能对标 Claude Opus / GPT-5。
-      <a href="https://open.bigmodel.cn/" style="margin-left:8px;">注册 →</a>
+      <a href="https://open.bigmodel.cn/">注册 →</a>
+    </p>
+    <p style="color:var(--text-dim);margin-bottom:14px;">
       Adapter 自动为每个目标生成对应 provider 配置（Hermes YAML / OpenCode JSON）。
     </p>
 
     <h3 style="margin: 40px 0 12px;font-size:17px;">测试</h3>
     <p style="color:var(--text-dim);margin-bottom:14px;">
-      仓库含 56 个端到端测试（含真实子进程执行 + 任意 source → IR → 任意 target 互迁）：
+      仓库含 45 个端到端测试（format-level 验证 + 真实子进程执行 + 任意 source → IR → 任意 target 互迁）：
     </p>
     <div class="qs-block">
       <pre><code>pip install pytest
-pytest tests/             # 56 passed</code></pre>
+pytest tests/             # 45 passed</code></pre>
     </div>
   </div>
 </section>
