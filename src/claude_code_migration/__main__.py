@@ -12,6 +12,7 @@ from .cowork import parse_cowork_zip
 from .secrets import scan_secrets
 from .adapters import ADAPTERS, get_adapter
 from .hub import NeuDriveHub, push_scan_to_hub
+from .sources import SOURCES, get_source
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
@@ -54,18 +55,46 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     out_dir = Path(args.out).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Scan
-    scan = scan_claude_code(project_dir=proj, include_sessions=not args.no_sessions)
-    scan_d = scan.to_dict()
-    save_scan(scan, out_dir / "scan.json")
+    # Source → IR (canonical intermediate representation).
+    # --source defaults to "claude-code" for backwards compat; any other source
+    # routes through the sources/ package which emits CanonicalData.
+    src = (args.source or "claude-code").strip()
+    source_fn = get_source(src)
+    source_kwargs: dict = {}
+    if src == "claude-code":
+        source_kwargs["include_sessions"] = not args.no_sessions
+    if src == "claude-chat" or src == "claude-cowork":
+        if not args.cowork_zip:
+            print(f"❌ --cowork-zip is required for source={src}", file=sys.stderr)
+            return 2
+        source_kwargs["zip_path"] = args.cowork_zip
+    else:
+        if proj:
+            source_kwargs["project_dir"] = proj
 
-    # Optional cowork ZIP
-    cowork_d = None
-    if args.cowork_zip:
-        cowork = parse_cowork_zip(args.cowork_zip)
-        cowork_d = cowork.to_dict()
-        (out_dir / "cowork.json").write_text(
-            json.dumps(cowork_d, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    ir = source_fn(**source_kwargs)
+    # Persist IR for debugging/reuse
+    ir_path = out_dir / "ir.json"
+    ir_path.write_text(
+        json.dumps(ir.to_dict(), indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8")
+
+    # Project IR → legacy adapter dict shapes
+    scan_d = ir.to_adapter_scan()
+    cowork_d = ir.to_cowork_export()
+
+    # For claude-code source, also run legacy scanner + overlay, and accept
+    # an additional --cowork-zip for merging (common "Code + Chat" migration).
+    if src == "claude-code":
+        save_scan(scan_claude_code(project_dir=proj,
+                                    include_sessions=not args.no_sessions),
+                  out_dir / "scan.json")
+        if args.cowork_zip:
+            cowork = parse_cowork_zip(args.cowork_zip)
+            cowork_d = cowork.to_dict()
+            (out_dir / "cowork.json").write_text(
+                json.dumps(cowork_d, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8")
 
     # Secret report
     secrets = scan_secrets(scan_d)
@@ -162,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # migrate
     mp = sub.add_parser("migrate", help="Run migration to one or more targets")
+    mp.add_argument("--source", default="claude-code",
+                    help=f"Source platform. Options: {', '.join(SOURCES)}. Default: claude-code")
     mp.add_argument("--target", required=True,
                     help=f"Target(s), comma-separated. Options: {', '.join(ADAPTERS)}")
     mp.add_argument("--project", help="Project dir (default: cwd)")

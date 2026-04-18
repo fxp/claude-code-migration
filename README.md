@@ -2,8 +2,8 @@
 
 > Python 工具集 + Claude Code Skills，把 Claude Code / Chat / Cowork 的本地数据迁到 Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub
 
-[![package](https://img.shields.io/badge/package-v0.1.0-blue)](./pyproject.toml)
-[![tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)](./tests/)
+[![package](https://img.shields.io/badge/package-v0.2.0-blue)](./pyproject.toml)
+[![tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)](./tests/)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](./pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](./LICENSE)
 
@@ -18,16 +18,34 @@ Claude 账号风控收紧，担心积累的 CLAUDE.md / 对话 / 项目 / 自定
 1. **Python 包**（推荐）— `pip install` 后用 `ccm` CLI，跑得起测试、可集成进 CI
 2. **Claude Code Skills** — 在 Claude Code 里直接 `/claude-full-migration`，适合无 Python 环境场景
 
-## 工具目标
+## 工具架构：N×M → N+M via Canonical IR
+
+不做点对点的 N×M 适配器组合，而是通过**中间层 IR** 做 N+M 转换。
+任意 source → IR → 任意 target，**新增平台只需一个 parser**。
 
 ```
-SOURCES (Claude.ai 官方)          MIGRATION (2 条路线)         TARGETS (4 个 Agent 框架)
-──────────────────────────        ──────────────────────       ──────────────────────────
-💬 Chat          ──────────▶      🔱 neuDrive Hub   ───────▶   🔱 Hermes Agent (Nous Research)
-👥 Cowork        ──────────▶         (对话归档主场)              ◇ OpenCode (sst/opencode)
-💻 Claude Code   ──┬──────▶       ⚙ claude-code-migration ──▶   ✎ Cursor
-                   │ (可选经 Hub)     (本项目·Cowork+Code)        ⚡ Windsurf
-                   └──────────▶
+SOURCES (N)                    MIDDLE LAYER (IR)              TARGETS (M)
+─────────────────              ─────────────────              ─────────────────
+💻 Claude Code         ┐                                      ┌  🔱 Hermes Agent
+💬 Claude.ai Chat      │       ┌─────────────────┐            │  ◇ OpenCode
+👥 Claude Cowork       ├──────▶│ CanonicalData   │────────────┤  ✎ Cursor
+✎ Cursor               │       │  (union of all   │            │  ⚡ Windsurf
+◇ OpenCode             │       │   agent concepts)│            │  🔱 neuDrive Hub
+🔱 Hermes              │       └─────────────────┘            │  (any new target)
+⚡ Windsurf            ┘                                      └
+```
+
+任何 Agent 之间互迁：
+
+```bash
+# Cursor → OpenCode（任意两目标互迁）
+ccm migrate --source cursor --project ~/my-proj --target opencode
+
+# Hermes → Windsurf（迁回非 Hermes）
+ccm migrate --source hermes --target windsurf
+
+# OpenCode → Cursor
+ccm migrate --source opencode --project ~/oc-proj --target cursor
 ```
 
 ## Python 包（推荐）
