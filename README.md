@@ -2,10 +2,10 @@
 
 > Python 工具集 + Claude Code Skills，把 Claude Code / Chat / Cowork 的本地数据迁到 Hermes / OpenCode / Cursor / Windsurf / neuDrive Hub
 
-[![package](https://img.shields.io/badge/package-v0.2.0-blue)](./pyproject.toml)
+[![PyPI](https://img.shields.io/pypi/v/claude-code-migration)](https://pypi.org/project/claude-code-migration/)
 [![tests](https://img.shields.io/badge/tests-88%20passing-brightgreen)](./tests/)
-[![python](https://img.shields.io/badge/python-3.11%2B-blue)](./pyproject.toml)
-[![license](https://img.shields.io/badge/license-MIT-lightgrey)](./LICENSE)
+[![python](https://img.shields.io/pypi/pyversions/claude-code-migration)](./pyproject.toml)
+[![license](https://img.shields.io/pypi/l/claude-code-migration)](./LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-keepachangelog-brightgreen)](./CHANGELOG.md)
 
 ---
@@ -56,6 +56,18 @@ ccm migrate --source opencode --project ~/oc-proj --target cursor
 ## Python 包（推荐）
 
 ### 安装
+
+```bash
+pip install claude-code-migration
+```
+
+或 pipx（推荐，全局 CLI 隔离）：
+
+```bash
+pipx install claude-code-migration
+```
+
+从源码安装（开发者）：
 
 ```bash
 git clone https://github.com/fxp/claude-code-migration
