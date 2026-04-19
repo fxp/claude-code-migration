@@ -6,10 +6,9 @@ import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from .base import (Adapter, MigrationResult, ensure_dir,
-                   build_universal_agents_md, render_cowork_project_markdown,
+                   render_cowork_project_markdown,
                    safe_slug, write_archive)
 
 

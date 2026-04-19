@@ -10,8 +10,8 @@ Reads:
 from __future__ import annotations
 
 import json
-import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -101,23 +101,25 @@ def parse(project_dir: str | Path | None = None,
 
     # Project MCP (.cursor/mcp.json)
     if proj and (proj / ".cursor" / "mcp.json").exists():
+        mcp_file = proj / ".cursor" / "mcp.json"
         try:
-            d = json.loads((proj / ".cursor" / "mcp.json").read_text())
+            d = json.loads(mcp_file.read_text())
             for name, srv in (d.get("mcpServers") or {}).items():
                 if isinstance(srv, dict):
                     ir.mcp_endpoints.append(_convert_mcp_entry(name, srv, "project"))
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"⚠️  cursor source: failed reading {mcp_file} — {e}", file=sys.stderr)
 
     # Global MCP (~/.cursor/mcp.json)
     if (home / "mcp.json").exists():
+        mcp_file = home / "mcp.json"
         try:
-            d = json.loads((home / "mcp.json").read_text())
+            d = json.loads(mcp_file.read_text())
             for name, srv in (d.get("mcpServers") or {}).items():
                 if isinstance(srv, dict):
                     ir.mcp_endpoints.append(_convert_mcp_entry(name, srv, "global"))
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"⚠️  cursor source: failed reading {mcp_file} — {e}", file=sys.stderr)
 
     # AGENTS.md → primary project context
     if proj:

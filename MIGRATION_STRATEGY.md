@@ -198,17 +198,27 @@ neuDrive/
 ### Phase 1: 当前已完成 ✅
 
 **Python 包（主要交付）**
-- [x] `claude-code-migration` v0.1.0 — pip installable，CLI `ccm`
-- [x] Scanner 覆盖 47 种 Claude Code 数据类型
+- [x] `claude-code-migration` v0.2.0 — pip installable，CLI `ccm`
+- [x] **3 步 CLI**：`ccm export` → `ccm apply` → one-shot `ccm migrate` + 保留 `ccm scan` 给 hub
+- [x] Scanner 覆盖 **60+** 种 Claude Code 数据类型（含 session 正文、subagents、
+  tool-results、shell-snapshots、session-env、file-history、per-project state）
+- [x] **Workspace Dossier / Canonical IR**（`src/canonical.py`）作为 N+M 档案层
 - [x] 4 个 adapter（Hermes / OpenCode / Cursor / Windsurf），每个格式经真实目标工具验证
+- [x] **反向 source parsers**：cursor / opencode / hermes / windsurf → Dossier，实现任意互迁
 - [x] Cowork 解析器（2026 ZIP schema，含 Artifacts/附件/分支对话）
 - [x] neuDrive Hub HTTP 客户端（不拷代码，只调 API）
-- [x] Secret detection + per-target env interpolation（无明文密钥泄漏，测试断言）
-- [x] 18 个端到端测试（7 format-level + 11 live-tool-level）
-- [x] 安全默认：adapters 默认 staging，不动真实项目；需 `--in-place` 显式才写入
+- [x] **密钥 redactor**（`src/redactor.py`）：写盘前扫描 key-name 白名单 + 自由文本
+  正则（sk-ant-*, ghp_*, AKIA*, Bearer, PEM, BigModel），替换为 `${CC_...}` 占位符
+- [x] **安全硬化**：dossier/scan 产物 0o600 权限，同目录 secrets-manifest.json，
+  ZIP bomb 守护（500 MB + 1000× ratio cap），`--in-place` git-clean 守卫，
+  hub path traversal 客户端校验，`--token-stdin` 避免 `ps aux` 泄漏
+- [x] **78 个端到端测试** — 12 e2e + 11 live-tool + 12 redactor +
+  10 hardening + 13 roundtrip + 20 cowork
+- [x] 安全默认：adapters 默认 staging，不动真实项目；`--in-place` 写真实项目前
+  自动 `git status` 守卫，脏树拒绝，需 `--force` 覆盖
 
 **Claude Code Skills（并行交付）**
-- [x] `hermes-migration` v4.0 — Claude Code → Hermes（47+ 数据类型）
+- [x] `hermes-migration` v4.0 — Claude Code → Hermes（60+ 数据类型）
 - [x] `chat-migration` v1.0 — Claude.ai ZIP 解析
 - [x] `cowork-migration` v1.0 — 团队导出 + 成员归属 + 密钥扫描
 - [x] `code-migration` v1.0 — 多目标泛化
@@ -219,7 +229,7 @@ neuDrive/
 - [x] neuDrive 源码调研（docs/neudrive-study.md）
 - [x] GitHub 公开仓库 + Pages（landing page）
 - [x] BigModel/GLM-5 作为推荐 LLM 提供商
-- [x] 两个真实项目 E2E 测试：OpenClaw Course + IdeaToProd
+- [x] 多项目 E2E 测试：50 个本地项目扫描，23 个有 session 的项目 × 4 target = 92 次迁移 / 0 失败
 
 ### Phase 2: Chat 导出 ✅ 已完成
 

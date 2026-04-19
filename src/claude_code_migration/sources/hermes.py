@@ -193,7 +193,8 @@ def parse(project_dir: str | Path | None = None,
                     ],
                 ))
             conn.close()
-        except Exception:
-            pass
+        except sqlite3.DatabaseError as e:
+            import sys
+            print(f"⚠️  hermes source: failed reading sessions from {db} — {e}", file=sys.stderr)
 
     return ir

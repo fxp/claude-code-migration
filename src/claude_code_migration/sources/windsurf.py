@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
-from ..canonical import (CanonicalData, McpEndpoint, Rule, Project, MemoryItem)
+from ..canonical import (CanonicalData, McpEndpoint, Rule, Project)
 
 
 def parse(project_dir: str | Path | None = None,
@@ -60,7 +61,7 @@ def parse(project_dir: str | Path | None = None,
                     headers=dict(srv.get("headers") or {}),
                     scope="global",
                 ))
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"⚠️  windsurf source: failed reading {mcp_path} — {e}", file=sys.stderr)
 
     return ir

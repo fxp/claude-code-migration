@@ -142,8 +142,9 @@ def write_archive(
         p = archive / "secrets-manifest.json"
         p.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         written.append(str(p))
-    except Exception:
-        pass
+    except (OSError, KeyError, TypeError) as e:
+        import sys
+        print(f"⚠️  adapter: failed writing secrets-manifest.json — {e}", file=sys.stderr)
 
     # MIGRATION_NOTES.md
     notes_lines = [

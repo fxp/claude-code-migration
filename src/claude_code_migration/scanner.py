@@ -443,8 +443,10 @@ def scan_claude_code(
                         "count": len(items) if isinstance(items, list) else 1,
                         "items": items,
                     })
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError) as e:
+                import sys
+                print(f"⚠️  scanner: skipping unreadable todo {f.name} — {e}",
+                      file=sys.stderr)
 
     # Plugin inventory (Cowork feature) — walk plugins/, marketplaces/, cache/
     plugins_dir = claude_home / "plugins"

@@ -102,7 +102,7 @@ def _rehydrate_dossier(d: dict[str, Any]) -> CanonicalData:
     so downstream to_adapter_scan() / asdict() still work."""
     from .canonical import (
         Identity, Memory, MemoryItem, Rule, Project, Document,
-        Conversation, Message, Artifact, Attachment,
+        Conversation, Message, Artifact,
         Skill, Agent, McpEndpoint, Plugin, Marketplace, Hook, ScheduledTask,
     )
 
