@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-19
+
+Patch release. Fixes a crash on the chat / cowork apply path discovered
+while exercising `ccm export` / `ccm apply` against real local data right
+after the v0.2.0 cut.
+
+### Fixed
+
+- **HIGH**: `ccm apply` crashed with `TypeError: asdict() should be
+  called on dataclass instances` whenever the loaded dossier contained a
+  message with at least one attachment. `_rehydrate_dossier` rebuilt
+  `Conversation.messages` and `Conversation.artifacts` but missed
+  `Message.attachments`, leaving them as raw dicts; `to_cowork_export`
+  then fed those dicts to `asdict()`. Affected every chat-migration and
+  cowork-migration apply, since attachments are the common case.
+- 4 new regression tests in `tests/test_dossier_rehydrate.py` pin down
+  rehydration of every nested dataclass list (`Message.attachments`,
+  `Conversation.artifacts`, `Project.docs`) plus a full chat-shaped
+  round-trip → cowork export.
+
+### Site
+
+- Landing page badge corrected (`v1.0` → `v0.2.0`, then `v0.2.1` here).
+- Added Open Graph / Twitter card meta and inline SVG favicon so shared
+  links render a preview and the browser tab is not blank.
+
 ## [0.2.0] — 2026-04-19
 
 First beta release. The codebase has been validated against 50 real local
@@ -115,6 +141,7 @@ Initial proof of concept. Single source (Claude Code) → four targets
 session capture. Legacy `ccm scan` + `ccm migrate` CLI. neuDrive Hub
 HTTP client.
 
-[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.1.0

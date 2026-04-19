@@ -10,7 +10,7 @@ Public Python API (everything else is an internal detail that may change):
 For the CLI, install the package and run `ccm --help`.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .canonical import CanonicalData, WorkspaceDossier
 from .cowork import parse_cowork_zip
