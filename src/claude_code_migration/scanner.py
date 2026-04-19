@@ -830,8 +830,33 @@ def _scan_env_reproduction(claude_home: Path, scan: ClaudeScan, max_mb: int) -> 
 
 
 def save_scan(scan: ClaudeScan, out_path: str | Path) -> None:
-    """Serialize scan to JSON."""
-    Path(out_path).write_text(
-        json.dumps(scan.to_dict(), indent=2, ensure_ascii=False, default=str),
+    """Serialize scan to JSON with plaintext secrets redacted.
+
+    scan.json can contain MCP Bearer tokens, pasted API keys in history,
+    env-var exports in shell snapshots, etc. We scrub them before disk
+    write via the `redactor` module and chmod 0o600 the output.
+    """
+    # Local import avoids a circular dep (secrets.py → scanner.py not used,
+    # but redactor.py is independent; keeping it local for symmetry).
+    from .redactor import redact, to_manifest
+
+    out_path = Path(out_path)
+    redacted_dict, findings = redact(scan.to_dict())
+    out_path.write_text(
+        json.dumps(redacted_dict, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
+    try:
+        os.chmod(out_path, 0o600)
+    except OSError:
+        pass
+    if findings:
+        manifest_path = out_path.parent / (out_path.stem + ".secrets-manifest.json")
+        manifest_path.write_text(
+            json.dumps(to_manifest(findings), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        try:
+            os.chmod(manifest_path, 0o600)
+        except OSError:
+            pass

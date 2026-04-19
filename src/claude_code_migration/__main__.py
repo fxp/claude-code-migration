@@ -22,6 +22,7 @@ from .canonical import CanonicalData
 from .scanner import scan_claude_code, save_scan
 from .cowork import parse_cowork_zip
 from .secrets import scan_secrets
+from .redactor import redact, to_manifest
 from .adapters import ADAPTERS, get_adapter
 from .hub import NeuDriveHub, push_scan_to_hub
 from .sources import SOURCES, get_source
@@ -54,11 +55,34 @@ def _source_to_ir(source: str, project: Path | None,
 
 
 def _write_ir(ir: CanonicalData, path: Path) -> None:
+    """Serialize IR to disk with plaintext secrets redacted.
+
+    The in-memory `ir` object stays untouched so same-process `migrate`
+    still has raw values for adapter env-var substitution. Disk copy has
+    all sensitive values replaced with `${CC_...}` env-var placeholders.
+    A `secrets-manifest.json` listing SHA256 prefixes (no plaintext) is
+    written alongside so users can audit what was scrubbed.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    redacted_dict, findings = redact(ir.to_dict())
     path.write_text(
-        json.dumps(ir.to_dict(), indent=2, ensure_ascii=False, default=str),
+        json.dumps(redacted_dict, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
+    try:
+        os.chmod(path, 0o600)  # user-only: defense against world-readable leak
+    except OSError:
+        pass
+    if findings:
+        manifest_path = path.parent / (path.stem + ".secrets-manifest.json")
+        manifest_path.write_text(
+            json.dumps(to_manifest(findings), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        try:
+            os.chmod(manifest_path, 0o600)
+        except OSError:
+            pass
 
 
 def _load_ir(path: Path) -> CanonicalData:
