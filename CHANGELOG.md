@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-04-20
+
+Stable 1.0 release. Same code as v0.2.1 — the version that has been
+running on the GitHub Pages landing page and validated against real
+local data — promoted to 1.0 as a stability commitment for the
+`ccm export` / `ccm apply` / `ccm migrate` CLI surface and the
+`WorkspaceDossier` schema.
+
+### Stability commitment
+
+- The 3-step CLI (`ccm export`, `ccm apply`, `ccm migrate`, plus
+  `ccm scan` and `ccm push-hub`) and their flags are stable. Removals
+  or breaking changes will require a 2.x major version.
+- `WorkspaceDossier` (schema `IR_VERSION = "1.0"`) is stable. New fields
+  may be added; existing fields will not be renamed or removed without
+  a major version bump.
+- Public Python API exported from the top-level package (`scan_claude_code`,
+  `save_scan`, `parse_cowork_zip`, `WorkspaceDossier`, `CanonicalData`,
+  `scan_secrets`, `redact`) is stable.
+
+### Notes
+
+- No source-code changes vs v0.2.1; only version-string bumps in
+  `pyproject.toml`, `src/claude_code_migration/__init__.py`, and the
+  landing-page badges.
+
 ## [0.2.1] — 2026-04-19
 
 Patch release. Fixes a crash on the chat / cowork apply path discovered
@@ -141,7 +167,8 @@ Initial proof of concept. Single source (Claude Code) → four targets
 session capture. Legacy `ccm scan` + `ccm migrate` CLI. neuDrive Hub
 HTTP client.
 
-[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fxp/claude-code-migration/releases/tag/v1.0.0
 [0.2.1]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.1.0
