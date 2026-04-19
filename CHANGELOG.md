@@ -5,6 +5,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-19
+
+Adds `ccm panic-backup` — a one-command emergency capture designed for the
+moment you suspect your Claude account is about to get throttled or banned.
+Unlike `ccm export` (which is vendor-neutral, redacted, and aimed at
+migration), `panic-backup` deliberately includes OAuth tokens, plugin state,
+and raw MCP Bearer keys so the archive is a true defensive snapshot.
+
+### Added
+
+- **`ccm panic-backup`** CLI verb (also `claude_code_migration.panic_backup`
+  Python API). Output is a single `.tar.gz` at chmod 0o600 following
+  neuDrive's canonical path convention (`/identity`, `/memory`, `/projects`,
+  `/skills`, `/conversations`, `/roles`) plus two extra trees:
+  - `/credentials/` — Tier-2 secrets: `~/.claude.json` `oauthAccount` block
+    (access + refresh tokens), `mcpServers` with plaintext Bearer tokens,
+    `~/.claude/plugins/` full tree, `mcp-needs-auth-cache.json`,
+    `settings*.json`. Includes a `README.md` with danger language.
+  - `/claude-code-extras/` — Tier-3 raw files: shell snapshots, session-env,
+    file-history, history.jsonl, raw-scan.json.
+- **RESTORE.md** auto-generated inside every archive with step-by-step
+  recovery for three scenarios: new Claude Code account, migrate to a
+  different agent, upload to neuDrive Hub.
+- **`manifest.json`** inside every archive describes what was captured
+  (tier counts, canonical path mapping, warnings).
+- **`--cowork-zip` flag** on panic-backup: if the user has already
+  triggered the official Settings → Privacy → Export data ZIP, unpacks
+  each conversation into `/conversations/claude-chat/<uuid>/` canonical
+  paths so the archive covers Tier-1 cloud data too.
+- **`--redact-credentials` flag**: skip `/credentials/` for a "safe to
+  share" archive (useful for posting as a bug report or analysis sample).
+- 10 new tests in `tests/test_panic_backup.py` covering archive
+  structure, chmod 0o600, credentials gating (default-on vs opt-out),
+  cowork-zip unpacking, warning surfacing.
+
+### Changed
+
+- **Archive layout mirrors upstream neuDrive** (`agi-bar/neuDrive`'s
+  `hubpath/canonical_paths.go`) so `neu sync import panic-backup.tar.gz`
+  works directly — panic-backup doubles as a Hub import bundle.
+- Scanner's `max_session_body_mb` default raised from 32 MB to 256 MB
+  when called from `panic_backup()` (vs 32 MB default for `ccm export`).
+  Rationale: panic-backup is local-only user data, bigger is better.
+- Top-level package exports extended with `panic_backup` + `PanicBackupResult`.
+
 ## [0.2.1] — 2026-04-19
 
 Patch release. Fixes a crash on the chat / cowork apply path discovered
@@ -141,7 +186,8 @@ Initial proof of concept. Single source (Claude Code) → four targets
 session capture. Legacy `ccm scan` + `ccm migrate` CLI. neuDrive Hub
 HTTP client.
 
-[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.3.0
 [0.2.1]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.1.0

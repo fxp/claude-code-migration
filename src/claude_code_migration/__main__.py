@@ -20,12 +20,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .canonical import CanonicalData
 from .scanner import scan_claude_code, save_scan
 from .cowork import parse_cowork_zip
+from .panic_backup import panic_backup
 from .secrets import scan_secrets
 from .redactor import redact, to_manifest
 from .adapters import ADAPTERS, get_adapter
@@ -453,6 +455,39 @@ def _resolve_token(args: argparse.Namespace) -> str | None:
     return None
 
 
+def cmd_panic_backup(args: argparse.Namespace) -> int:
+    """Emergency capture: everything a Claude ban would destroy → one tar.gz."""
+    out = Path(args.out).resolve() if args.out else (
+        Path("./ccm-output") /
+        f"panic-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tar.gz"
+    ).resolve()
+    proj = Path(args.project).resolve() if args.project else None
+    cowork_zip = args.cowork_zip
+    include_creds = not args.redact_credentials
+
+    result = panic_backup(
+        out_path=out,
+        project_dir=proj,
+        include_credentials=include_creds,
+        cowork_zip=cowork_zip,
+    )
+
+    print(f"\n═══ Panic Backup complete ═══")
+    print(f"  Archive:          {result.archive_path}  ({result.size_bytes // 1024} KB)")
+    print(f"  Files:            {result.files_written}")
+    print(f"  Tier-3 types:     {result.tier3_local_types} data-type categories")
+    print(f"  Tier-2 creds:     {'INCLUDED (plaintext, chmod 0o600)' if result.tier2_secrets_included else 'excluded'}")
+    print(f"  Tier-1 cloud:     {len(result.tier1_sources) and ', '.join(result.tier1_sources) or 'not included (pass --cowork-zip)'}")
+    if result.warnings:
+        print(f"\n  ⚠️  {len(result.warnings)} warning(s):")
+        for w in result.warnings:
+            print(f"     · {w}")
+    print(f"\n  Restore guide:    inside archive as RESTORE.md")
+    if result.tier2_secrets_included:
+        print(f"  ⚠️  Archive contains plaintext OAuth + MCP tokens. Treat as a password file.")
+    return 0
+
+
 def cmd_push_hub(args: argparse.Namespace) -> int:
     scan_path = Path(args.scan)
     if not scan_path.exists():
@@ -567,6 +602,32 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(func=cmd_scan)
 
     # push-hub (unchanged)
+    # Panic Backup · one-command emergency capture
+    pb = sub.add_parser(
+        "panic-backup",
+        help="Emergency · capture everything a Claude ban would destroy into one tar.gz",
+        description=(
+            "Grab every local file a Claude account ban would make useless or unreachable: "
+            "CLAUDE.md / memories / skills / agents / session JSONL / shell snapshots / "
+            "file history / OAuth tokens / plugin state / MCP Bearer keys. "
+            "Output follows neuDrive canonical paths so the same archive doubles as a "
+            "Hub import bundle. Includes a RESTORE.md with recovery steps."
+        ),
+    )
+    pb.add_argument("--out", help="Archive path (default: ./ccm-output/panic-backup-<ts>.tar.gz)")
+    pb.add_argument("--project", help="Project dir to include as /projects/<name>/ entry")
+    pb.add_argument(
+        "--cowork-zip",
+        help="claude.ai official data-export ZIP — unpacked into /conversations/ paths",
+    )
+    pb.add_argument(
+        "--redact-credentials",
+        action="store_true",
+        help="Skip /credentials/ (OAuth + MCP tokens). Archive becomes safe to share "
+             "but useless for re-auth on a new machine.",
+    )
+    pb.set_defaults(func=cmd_panic_backup)
+
     hp = sub.add_parser("push-hub", help="Push a scan.json to neuDrive Hub")
     hp.add_argument("--scan", required=True, help="Path to scan.json")
     hp.add_argument("--cowork-json", help="Optional cowork.json")

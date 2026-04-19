@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-code-migration"
-version = "0.2.1"
+version = "0.3.0"
 description = "Migrate Claude Code / Chat / Cowork workspaces to Hermes / OpenCode / Cursor / Windsurf via a vendor-neutral Workspace Dossier"
 readme = "README.md"
 license = { text = "MIT" }

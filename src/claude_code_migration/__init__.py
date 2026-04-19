@@ -10,10 +10,11 @@ Public Python API (everything else is an internal detail that may change):
 For the CLI, install the package and run `ccm --help`.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 from .canonical import CanonicalData, WorkspaceDossier
 from .cowork import parse_cowork_zip
+from .panic_backup import PanicBackupResult, panic_backup
 from .redactor import redact
 from .scanner import scan_claude_code, save_scan
 from .secrets import scan_secrets
@@ -28,4 +29,6 @@ __all__ = [
     "CanonicalData", "WorkspaceDossier",
     # Security
     "scan_secrets", "redact",
+    # Panic backup — emergency capture of everything a ban would destroy
+    "panic_backup", "PanicBackupResult",
 ]
