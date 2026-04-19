@@ -102,7 +102,7 @@ def _rehydrate_dossier(d: dict[str, Any]) -> CanonicalData:
     so downstream to_adapter_scan() / asdict() still work."""
     from .canonical import (
         Identity, Memory, MemoryItem, Rule, Project, Document,
-        Conversation, Message, Artifact,
+        Conversation, Message, Artifact, Attachment,
         Skill, Agent, McpEndpoint, Plugin, Marketplace, Hook, ScheduledTask,
     )
 
@@ -145,6 +145,11 @@ def _rehydrate_dossier(d: dict[str, Any]) -> CanonicalData:
         conv = _mk(Conversation, c)
         if conv.messages:
             conv.messages = [_mk(Message, m) if isinstance(m, dict) else m for m in conv.messages]
+            # Message.attachments must be rehydrated too — to_cowork_export()
+            # later calls asdict(a) on each attachment and crashes on raw dicts.
+            for msg in conv.messages:
+                if msg and msg.attachments:
+                    msg.attachments = [_mk(Attachment, a) if isinstance(a, dict) else a for a in msg.attachments]
         if conv.artifacts:
             conv.artifacts = [_mk(Artifact, a) if isinstance(a, dict) else a for a in conv.artifacts]
         convs.append(conv)
