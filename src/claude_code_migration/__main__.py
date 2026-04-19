@@ -3,11 +3,16 @@
 The canonical user journey has three steps:
 
     1. Add project        — just tell the tool where it lives (--project)
-    2. Export to IR       — `ccm export` writes ir.json (canonical intermediate)
-    3. Apply to a target  — `ccm apply --ir ir.json --target hermes`
+    2. Export dossier     — `ccm export` writes dossier.json (Workspace Dossier)
+    3. Apply to a target  — `ccm apply --dossier dossier.json --target hermes`
 
 For one-shot use, `ccm migrate` chains steps 2 and 3. `ccm scan` is kept as
 a legacy / power-user verb that dumps the raw scanner dict.
+
+Terminology: "Workspace Dossier" (项目档案) is the user-facing name for what
+the code calls CanonicalData / IR. The dossier is a vendor-neutral JSON
+record of your Claude workspace — your memories, agents, skills, sessions,
+MCP configs — that travels with you when you change agents.
 """
 from __future__ import annotations
 
@@ -32,11 +37,11 @@ from .sources import SOURCES, get_source
 # Helpers shared across verbs
 # ──────────────────────────────────────────────────────────────────────────
 
-def _source_to_ir(source: str, project: Path | None,
+def _source_to_dossier(source: str, project: Path | None,
                   cowork_zip: str | None,
                   include_sessions: bool,
                   max_session_mb: int) -> CanonicalData:
-    """Step 2: any source → canonical IR."""
+    """Step 2: any source → Workspace Dossier (CanonicalData in code)."""
     source_fn = get_source(source)
     kwargs: dict[str, Any] = {}
     if source == "claude-code":
@@ -54,17 +59,17 @@ def _source_to_ir(source: str, project: Path | None,
     return source_fn(**kwargs)
 
 
-def _write_ir(ir: CanonicalData, path: Path) -> None:
-    """Serialize IR to disk with plaintext secrets redacted.
+def _write_dossier(dossier: CanonicalData, path: Path) -> None:
+    """Serialize the Workspace Dossier to disk with secrets redacted.
 
-    The in-memory `ir` object stays untouched so same-process `migrate`
+    The in-memory `dossier` object stays untouched so same-process `migrate`
     still has raw values for adapter env-var substitution. Disk copy has
     all sensitive values replaced with `${CC_...}` env-var placeholders.
-    A `secrets-manifest.json` listing SHA256 prefixes (no plaintext) is
-    written alongside so users can audit what was scrubbed.
+    A `<stem>.secrets-manifest.json` listing SHA256 prefixes (no plaintext)
+    is written alongside so users can audit what was scrubbed.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    redacted_dict, findings = redact(ir.to_dict())
+    redacted_dict, findings = redact(dossier.to_dict())
     path.write_text(
         json.dumps(redacted_dict, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
@@ -85,22 +90,16 @@ def _write_ir(ir: CanonicalData, path: Path) -> None:
             pass
 
 
-def _load_ir(path: Path) -> CanonicalData:
-    """Rehydrate a CanonicalData from its JSON serialization."""
-    from dataclasses import fields
+def _load_dossier(path: Path) -> CanonicalData:
+    """Rehydrate a Workspace Dossier from its JSON serialization on disk."""
     d = json.loads(path.read_text(encoding="utf-8"))
-    ir = CanonicalData()
-    for f in fields(CanonicalData):
-        if f.name in d:
-            setattr(ir, f.name, d[f.name])
-    # Lists of dataclasses are kept as dicts — that's fine: to_adapter_scan()
-    # only needs the dict shape via asdict(), which already matches.
-    # For safety, wrap them back so asdict doesn't choke.
-    return _rehydrate_ir(d)
+    # For safety, wrap lists back into dataclasses so asdict() won't choke later.
+    return _rehydrate_dossier(d)
 
 
-def _rehydrate_ir(d: dict[str, Any]) -> CanonicalData:
-    """Map a raw dict back into CanonicalData dataclasses so to_adapter_scan works."""
+def _rehydrate_dossier(d: dict[str, Any]) -> CanonicalData:
+    """Map a raw dict back into CanonicalData (Workspace Dossier) dataclasses
+    so downstream to_adapter_scan() / asdict() still work."""
     from .canonical import (
         Identity, Memory, MemoryItem, Rule, Project, Document,
         Conversation, Message, Artifact, Attachment,
@@ -206,7 +205,7 @@ def _check_in_place_safety(proj: Path, force: bool) -> None:
         raise SystemExit(2)
 
 
-def _apply_ir(ir: CanonicalData, targets: list[str], out_dir: Path,
+def _apply_dossier(ir: CanonicalData, targets: list[str], out_dir: Path,
               in_place: bool, project_override: Path | None = None,
               cowork_zip: str | None = None,
               force: bool = False) -> list[tuple[str, Any]]:
@@ -256,21 +255,21 @@ def _apply_ir(ir: CanonicalData, targets: list[str], out_dir: Path,
     return results
 
 
-def _print_ir_summary(ir: CanonicalData, ir_path: Path | None) -> None:
+def _print_dossier_summary(dossier: CanonicalData, dossier_path: Path | None) -> None:
     print(f"\n═══ Step 2 · Export complete ═══")
-    if ir_path:
-        print(f"  IR written:           {ir_path}")
-    print(f"  Source platform:      {ir.source_platform}")
-    print(f"  Source project:       {ir.source_project_dir or '(none)'}")
-    print(f"  Conversations:        {len(ir.conversations)} "
-          f"({sum(len(c.messages) for c in ir.conversations)} messages)")
-    print(f"  Skills / Agents:      {len(ir.skills)} / {len(ir.agents)}")
-    print(f"  MCP endpoints:        {len(ir.mcp_endpoints)}")
-    print(f"  Plugins / Marketplaces: {len(ir.plugins)} / {len(ir.marketplaces)}")
-    print(f"  Hooks / Scheduled tasks: {len(ir.hooks)} / {len(ir.scheduled_tasks)}")
-    secrets = scan_secrets(ir.to_adapter_scan())
+    if dossier_path:
+        print(f"  Dossier written:      {dossier_path}")
+    print(f"  Source platform:      {dossier.source_platform}")
+    print(f"  Source project:       {dossier.source_project_dir or '(none)'}")
+    print(f"  Conversations:        {len(dossier.conversations)} "
+          f"({sum(len(c.messages) for c in dossier.conversations)} messages)")
+    print(f"  Skills / Agents:      {len(dossier.skills)} / {len(dossier.agents)}")
+    print(f"  MCP endpoints:        {len(dossier.mcp_endpoints)}")
+    print(f"  Plugins / Marketplaces: {len(dossier.plugins)} / {len(dossier.marketplaces)}")
+    print(f"  Hooks / Scheduled tasks: {len(dossier.hooks)} / {len(dossier.scheduled_tasks)}")
+    secrets = scan_secrets(dossier.to_adapter_scan())
     if secrets:
-        print(f"  ⚠️  Secrets detected: {len(secrets)} (redacted in target output)")
+        print(f"  ⚠️  Secrets detected: {len(secrets)} (redacted on disk)")
 
 
 def _print_apply_summary(results: list[tuple[str, Any]], out_dir: Path) -> None:
@@ -293,34 +292,34 @@ def _print_apply_summary(results: list[tuple[str, Any]], out_dir: Path) -> None:
 # ──────────────────────────────────────────────────────────────────────────
 
 def cmd_export(args: argparse.Namespace) -> int:
-    """Step 2: source → IR (ir.json)."""
+    """Step 2: source → Workspace Dossier (dossier.json)."""
     proj = Path(args.project).resolve() if args.project else None
-    ir = _source_to_ir(
+    dossier = _source_to_dossier(
         source=args.source,
         project=proj,
         cowork_zip=args.cowork_zip,
         include_sessions=not args.no_sessions,
         max_session_mb=args.max_session_mb,
     )
-    out_path = Path(args.out).resolve() if args.out else (Path("./ccm-output") / "ir.json").resolve()
-    _write_ir(ir, out_path)
-    _print_ir_summary(ir, out_path)
-    print(f"\n  Next step → ccm apply --ir {out_path} --target <hermes|opencode|cursor|windsurf>")
+    out_path = Path(args.out).resolve() if args.out else (Path("./ccm-output") / "dossier.json").resolve()
+    _write_dossier(dossier, out_path)
+    _print_dossier_summary(dossier, out_path)
+    print(f"\n  Next step → ccm apply --dossier {out_path} --target <hermes|opencode|cursor|windsurf>")
     return 0
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
-    """Step 3: IR → target(s)."""
-    ir_path = Path(args.ir).resolve()
-    if not ir_path.exists():
-        print(f"❌ IR not found: {ir_path}", file=sys.stderr)
+    """Step 3: Workspace Dossier → target(s)."""
+    dossier_path = Path(args.dossier).resolve()
+    if not dossier_path.exists():
+        print(f"❌ Dossier not found: {dossier_path}", file=sys.stderr)
         return 2
-    ir = _load_ir(ir_path)
+    dossier = _load_dossier(dossier_path)
     out_dir = Path(args.out).resolve()
     targets = [t.strip() for t in args.target.split(",") if t.strip()]
     project_override = Path(args.project).resolve() if args.project else None
-    results = _apply_ir(
-        ir=ir,
+    results = _apply_dossier(
+        ir=dossier,
         targets=targets,
         out_dir=out_dir,
         in_place=args.in_place,
@@ -339,16 +338,16 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 2
-    ir = _source_to_ir(
+    dossier = _source_to_dossier(
         source=args.source,
         project=proj,
         cowork_zip=args.cowork_zip,
         include_sessions=not args.no_sessions,
         max_session_mb=args.max_session_mb,
     )
-    ir_path = out_dir / "ir.json"
-    _write_ir(ir, ir_path)
-    _print_ir_summary(ir, ir_path)
+    dossier_path = out_dir / "dossier.json"
+    _write_dossier(dossier, dossier_path)
+    _print_dossier_summary(dossier, dossier_path)
 
     # Legacy compatibility: also dump scan.json for claude-code source
     if args.source == "claude-code":
@@ -359,8 +358,8 @@ def cmd_migrate(args: argparse.Namespace) -> int:
 
     # Step 3
     targets = [t.strip() for t in args.target.split(",") if t.strip()]
-    results = _apply_ir(
-        ir=ir,
+    results = _apply_dossier(
+        ir=dossier,
         targets=targets,
         out_dir=out_dir,
         in_place=args.in_place,
@@ -500,34 +499,39 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="claude-code-migration",
         description=(
-            "3-step migration: export Claude Code (or Chat/Cowork) to a canonical IR, "
-            "then apply the IR to any supported agent (Hermes/OpenCode/Cursor/Windsurf)."
+            "3-step migration: export Claude Code (or Chat/Cowork) into a "
+            "vendor-neutral Workspace Dossier (dossier.json), then apply the "
+            "dossier to any supported agent (Hermes/OpenCode/Cursor/Windsurf)."
         ),
         epilog=(
             "User journey:\n"
-            "  1. ccm export --project <dir> --out ir.json\n"
-            "  2. ccm apply  --ir ir.json --target hermes --out ./out\n"
+            "  1. ccm export --project <dir> --out dossier.json\n"
+            "  2. ccm apply  --dossier dossier.json --target hermes --out ./out\n"
             "  (or one-shot) ccm migrate --project <dir> --target hermes --out ./out\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # Step 2 · export (source → ir.json)
+    # Step 2 · export (source → dossier.json)
     ep = sub.add_parser("export",
-                        help="Step 2 · source project → canonical IR (ir.json)")
+                        help="Step 2 · source project → Workspace Dossier (dossier.json)")
     _add_source_args(ep)
-    ep.add_argument("--out", help="Write ir.json to path (default: ./ccm-output/ir.json)")
+    ep.add_argument("--out", help="Write dossier.json to path (default: ./ccm-output/dossier.json)")
     ep.set_defaults(func=cmd_export)
 
-    # Step 3 · apply (ir.json → target)
+    # Step 3 · apply (dossier.json → target)
     ap = sub.add_parser("apply",
-                        help="Step 3 · IR → target agent project dir")
-    ap.add_argument("--ir", required=True, help="Path to ir.json produced by `export`")
+                        help="Step 3 · Workspace Dossier → target agent project dir")
+    ap.add_argument(
+        "--dossier", "--ir",
+        dest="dossier", required=True,
+        help="Path to dossier.json produced by `export` (also accepts legacy --ir flag)",
+    )
     ap.add_argument("--target", required=True,
                     help=f"Target(s), comma-separated. Options: {', '.join(ADAPTERS)}")
     ap.add_argument("--out", default="./ccm-output", help="Output dir")
-    ap.add_argument("--project", help="Override source project path recorded in IR")
+    ap.add_argument("--project", help="Override source project path recorded in the dossier")
     ap.add_argument("--cowork-zip", help="Optional Claude.ai/Cowork export ZIP to overlay")
     ap.add_argument("--in-place", action="store_true",
                     help="Write project-root files into the real project dir instead of "

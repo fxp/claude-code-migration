@@ -413,8 +413,15 @@ class CanonicalData:
         }
 
 
+# User-facing alias. `CanonicalData` is the internal / compiler-speak name;
+# `WorkspaceDossier` is what the product calls it in docs and CLI. They are the
+# same class — `isinstance(x, WorkspaceDossier)` works because it's just a
+# module-level rebinding, not a subclass.
+WorkspaceDossier = CanonicalData
+
+
 __all__ = [
-    "IR_VERSION", "CanonicalData",
+    "IR_VERSION", "CanonicalData", "WorkspaceDossier",
     "Identity", "Memory", "MemoryItem", "Rule",
     "Project", "Document",
     "Conversation", "Message", "Artifact", "Attachment",

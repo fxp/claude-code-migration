@@ -18,22 +18,26 @@ Claude 账号风控收紧，担心积累的 CLAUDE.md / 对话 / 项目 / 自定
 1. **Python 包**（推荐）— `pip install` 后用 `ccm` CLI，跑得起测试、可集成进 CI
 2. **Claude Code Skills** — 在 Claude Code 里直接 `/claude-full-migration`，适合无 Python 环境场景
 
-## 工具架构：N×M → N+M via Canonical IR
+## 工具架构：N×M → N+M via Workspace Dossier
 
-不做点对点的 N×M 适配器组合，而是通过**中间层 IR** 做 N+M 转换。
-任意 source → IR → 任意 target，**新增平台只需一个 parser**。
+不做点对点的 N×M 适配器组合，而是通过 **Workspace Dossier（项目档案）** 做 N+M 转换。
+任意 source → Dossier → 任意 target，**新增平台只需一个 parser**。
 
 ```
-SOURCES (N)                    MIDDLE LAYER (IR)              TARGETS (M)
-─────────────────              ─────────────────              ─────────────────
-💻 Claude Code         ┐                                      ┌  🔱 Hermes Agent
-💬 Claude.ai Chat      │       ┌─────────────────┐            │  ◇ OpenCode
-👥 Claude Cowork       ├──────▶│ CanonicalData   │────────────┤  ✎ Cursor
-✎ Cursor               │       │  (union of all   │            │  ⚡ Windsurf
-◇ OpenCode             │       │   agent concepts)│            │  🔱 neuDrive Hub
-🔱 Hermes              │       └─────────────────┘            │  (any new target)
-⚡ Windsurf            ┘                                      └
+SOURCES (N)                 WORKSPACE DOSSIER               TARGETS (M)
+─────────────────           ─────────────────               ─────────────────
+💻 Claude Code         ┐                                    ┌  🔱 Hermes Agent
+💬 Claude.ai Chat      │    ┌────────────────────┐          │  ◇ OpenCode
+👥 Claude Cowork       ├───▶│ dossier.json        │──────────┤  ✎ Cursor
+✎ Cursor               │    │  (vendor-neutral,   │          │  ⚡ Windsurf
+◇ OpenCode             │    │   redacted, 0600,   │          │  🔱 neuDrive Hub
+🔱 Hermes              │    │   belongs to you)   │          │  (any new target)
+⚡ Windsurf            ┘    └────────────────────┘          └
 ```
+
+> **术语**：代码里叫 `CanonicalData` / 内部习惯叫 IR；**对外统称 Workspace Dossier（项目档案）**。
+> 这是一份归你所有、厂商中立的工作记录——你的 memory、agents、skills、sessions、MCP 配置——
+> 未来换 Agent 时带着它走就行。
 
 任何 Agent 之间互迁：
 
@@ -64,20 +68,20 @@ CLI 入口：`ccm` 或 `claude-code-migration`。
 ### 3 步使用（与你的心智模型对齐）
 
 ```
- ┌── Step 1 ─────────────┐    ┌── Step 2 ──────────────┐    ┌── Step 3 ───────────────┐
- │ 告诉工具项目在哪      │ →  │ 自动识别 + 导出为 IR   │ →  │ 按选定目标框架生成项目  │
- │ (--project /path)     │    │ (ir.json，中间状态)    │    │ (--target hermes/…)     │
- └───────────────────────┘    └────────────────────────┘    └─────────────────────────┘
+ ┌── Step 1 ─────────────┐    ┌── Step 2 ────────────────┐    ┌── Step 3 ───────────────┐
+ │ 告诉工具项目在哪      │ →  │ 自动识别 + 导出为项目档案 │ →  │ 按选定目标框架生成项目  │
+ │ (--project /path)     │    │ (dossier.json)           │    │ (--target hermes/…)     │
+ └───────────────────────┘    └──────────────────────────┘    └─────────────────────────┘
 ```
 
 ```bash
-# Step 2 · 扫描并导出为 IR（中间状态）
-ccm export --project /path/to/your-project --out ./ccm-output/ir.json
+# Step 2 · 扫描并导出为 Workspace Dossier（项目档案）
+ccm export --project /path/to/your-project --out ./ccm-output/dossier.json
 
-# Step 3 · 把同一份 IR 生成为任意目标（可反复跑，换 target 不必重扫）
-ccm apply --ir ./ccm-output/ir.json --target hermes   --out ./ccm-output
-ccm apply --ir ./ccm-output/ir.json --target opencode --out ./ccm-output
-ccm apply --ir ./ccm-output/ir.json --target cursor,windsurf --out ./ccm-output
+# Step 3 · 把同一份档案生成为任意目标（可反复跑，换 target 不必重扫）
+ccm apply --dossier ./ccm-output/dossier.json --target hermes   --out ./ccm-output
+ccm apply --dossier ./ccm-output/dossier.json --target opencode --out ./ccm-output
+ccm apply --dossier ./ccm-output/dossier.json --target cursor,windsurf --out ./ccm-output
 
 # 一次跑完（export + apply 打包）
 ccm migrate --project /path/to/your-project --target hermes,opencode,cursor,windsurf
@@ -92,17 +96,19 @@ ccm scan     --project /path/to/your-project --out ./ccm-output/scan.json
 ccm push-hub --scan   ./ccm-output/scan.json --token $NEUDRIVE_TOKEN
 ```
 
-**为什么分三步？** 一次 `export` 后，`apply` 可以针对不同 target 反复跑，而不用再扫一遍
-（大项目的 session JSONL 常常几十 MB）。IR 是审计 / 版本控制友好的纯 JSON。
+> 老用户：`--ir` 作为别名保留，`ccm apply --ir old-ir.json` 仍然工作。
 
-**关于安全性**：写盘的 `ir.json` / `scan.json` 自动完成：
+**为什么分三步？** 一次 `export` 后，`apply` 可以针对不同 target 反复跑，而不用再扫一遍
+（大项目的 session JSONL 常常几十 MB）。Dossier 是纯 JSON，可审计、可版本控制。
+
+**关于安全性**：写盘的 `dossier.json` / `scan.json` 自动完成：
 - **明文密钥 redact**：MCP headers 里的 Bearer、环境变量里的 `*_API_KEY`、会话正文/历史里粘贴的
   `sk-ant-*` / `ghp_*` / `AKIA*` / PEM private keys / BigModel `32hex.16alnum` 全部替换为
   `${CC_<PATH>}` 占位符，adapters 会把这些占位符原样传到 target config（运行时读 env）。
 - **文件权限 0o600**：user-only，防止共享机器上其他账户 `cat` 走。
 - **同目录生成 `*.secrets-manifest.json`**：只含 SHA256 前缀和建议 env var 名，不含原文；
   可以用来审计"这次导出哪些密钥被脱敏了"。
-- 即便是经过脱敏，IR 仍然包含 session 正文、shell 快照等隐私内容 —— **不建议 commit 到公共仓库**。
+- 即便是经过脱敏，Dossier 仍然包含 session 正文、shell 快照等隐私内容 —— **不建议 commit 到公共仓库**。
   自用备份 / 本地迁移是完全安全的。
 
 ### 安全默认
@@ -139,7 +145,7 @@ pytest tests/            # 56 个测试全部通过
 - **`test_e2e_live.py`** (11)：**真实子进程执行**（`opencode models` 等）
 - **`test_cowork.py`** (12)：插件清单 + org metadata 传播
 - **`test_cowork_full.py`** (13)：Cowork Projects + `_archive` + 不可迁移项
-- **`test_roundtrip.py`** (13)：**任意 source → IR → 任意 target** 互迁
+- **`test_roundtrip.py`** (13)：**任意 source → Dossier → 任意 target** 互迁
 
 ## 目标框架支持矩阵
 

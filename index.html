@@ -870,13 +870,13 @@
     </div>
     <h1>当你担心 Claude 账号被封<br><span class="gradient">先备份，再迁移</span></h1>
     <p class="tagline">
-      通过 <strong>中间层 IR</strong>，任意 Agent 平台之间互相迁移：
+      通过 <strong>Workspace Dossier（项目档案）</strong>，任意 Agent 平台之间互相迁移：
       <strong>Claude Code / Chat / Cowork / Cursor / OpenCode / Hermes / Windsurf</strong> 两两互通。
     </p>
     <div class="hero-flow">
       <div class="flow-step"><span class="flow-num">①</span><span class="flow-label">指项目</span><code>--project &lt;dir&gt;</code></div>
       <span class="flow-arrow">→</span>
-      <div class="flow-step"><span class="flow-num">②</span><span class="flow-label">导出 IR</span><code>ccm export</code></div>
+      <div class="flow-step"><span class="flow-num">②</span><span class="flow-label">导出档案</span><code>ccm export</code></div>
       <span class="flow-arrow">→</span>
       <div class="flow-step"><span class="flow-num">③</span><span class="flow-label">生成目标</span><code>ccm apply --target &lt;agent&gt;</code></div>
     </div>
@@ -898,7 +898,7 @@
       <div><div class="stat-num">7</div><div class="stat-label">SOURCES (源)</div></div>
       <div><div class="stat-num">4</div><div class="stat-label">TARGETS (目标)</div></div>
       <div><div class="stat-num">60+</div><div class="stat-label">数据类型覆盖</div></div>
-      <div><div class="stat-num">N+M</div><div class="stat-label">VIA CANONICAL IR</div></div>
+      <div><div class="stat-num">N+M</div><div class="stat-label">VIA WORKSPACE DOSSIER</div></div>
     </div>
   </div>
 </section>
@@ -964,17 +964,17 @@
       <div class="own-col own-col-after">
         <div class="own-label">✅ 数据归你所有</div>
         <ul class="own-list">
-          <li>一份 <code>ir.json</code> · 存在你选的磁盘、你的云盘</li>
+          <li>一份 <code>dossier.json</code> · 存在你选的磁盘、你的云盘</li>
           <li>纯 JSON schema · 厂商中立，任何人能读写</li>
           <li>60+ 数据类型归一 · session 正文 / memory / skills / MCP / hooks</li>
           <li>密钥 auto-redact + 0600 权限 · 给哪个 Agent 用你说了算</li>
-          <li>同一份 IR · 生成 Hermes / OpenCode / Cursor / Windsurf 配置</li>
+          <li>同一份档案 · 生成 Hermes / OpenCode / Cursor / Windsurf 配置</li>
         </ul>
       </div>
     </div>
 
     <p class="own-manifesto">
-      IR 是 <strong>Canonical Intermediate Representation</strong> ——
+      <strong>Workspace Dossier（项目档案）</strong> ——
       把你跟 Agent 的交互过程从"工具内部状态"提升为"你的个人数据资产"。
       未来要换 Codex？写一个 adapter。飞书接入？写一个 adapter。
       你的 workspace 保持不变，搬家的是 Agent，不是你。
@@ -987,7 +987,7 @@
     <div class="section-header">
       <span class="section-tag">HOW IT WORKS</span>
       <h2 class="section-title">3 步走 · 与你的心智模型对齐</h2>
-      <p class="section-sub">添加项目 → 导出为中间状态（IR）→ 生成目标 Agent 项目。每步有独立产物，可审计、可复用、可换 target。</p>
+      <p class="section-sub">添加项目 → 导出为 Workspace Dossier（项目档案）→ 生成目标 Agent 项目。每步有独立产物，可审计、可复用、可换 target。</p>
     </div>
     <div class="hiw-grid">
       <div class="hiw-card">
@@ -1002,28 +1002,28 @@
       <div class="hiw-arrow">→</div>
       <div class="hiw-card">
         <div class="hiw-badge">② EXPORT</div>
-        <h3>自动识别 + 导出为 IR</h3>
+        <h3>自动识别 + 导出为项目档案</h3>
         <div class="hiw-io">
           <div class="hiw-io-row"><span class="hiw-io-tag">INPUT</span>Claude Code / Cursor / OpenCode / Hermes / Windsurf / Chat ZIP / Cowork ZIP</div>
-          <div class="hiw-io-row"><span class="hiw-io-tag">PROCESS</span>扫描 60+ 种数据类型 · 归一到 <strong>CanonicalData</strong> · 敏感数据检测</div>
-          <div class="hiw-io-row"><span class="hiw-io-tag">OUTPUT</span><code>ir.json</code>（纯 JSON，密钥自动 redact，权限 0600）</div>
+          <div class="hiw-io-row"><span class="hiw-io-tag">PROCESS</span>扫描 60+ 种数据类型 · 归一到 <strong>Workspace Dossier</strong> · 敏感数据检测</div>
+          <div class="hiw-io-row"><span class="hiw-io-tag">OUTPUT</span><code>dossier.json</code>（纯 JSON，密钥自动 redact，权限 0600）</div>
         </div>
-        <div class="hiw-cmd"><code>ccm export --project &lt;dir&gt; --out ir.json</code></div>
+        <div class="hiw-cmd"><code>ccm export --project &lt;dir&gt; --out dossier.json</code></div>
       </div>
       <div class="hiw-arrow">→</div>
       <div class="hiw-card">
         <div class="hiw-badge">③ APPLY</div>
         <h3>生成目标 Agent 项目</h3>
         <div class="hiw-io">
-          <div class="hiw-io-row"><span class="hiw-io-tag">INPUT</span><code>ir.json</code> + <code>--target &lt;hermes|opencode|cursor|windsurf&gt;</code></div>
+          <div class="hiw-io-row"><span class="hiw-io-tag">INPUT</span><code>dossier.json</code> + <code>--target &lt;hermes|opencode|cursor|windsurf&gt;</code></div>
           <div class="hiw-io-row"><span class="hiw-io-tag">PROCESS</span>适配器按目标格式渲染（<code>.hermes/</code> / <code>.cursor/</code> / <code>AGENTS.md</code> / <code>mcp_config.json</code>）</div>
           <div class="hiw-io-row"><span class="hiw-io-tag">OUTPUT</span>开箱即用的目标项目目录（默认 staging，不动真实项目）</div>
         </div>
-        <div class="hiw-cmd"><code>ccm apply --ir ir.json --target hermes</code></div>
+        <div class="hiw-cmd"><code>ccm apply --dossier dossier.json --target hermes</code></div>
       </div>
     </div>
     <p class="hiw-note">
-      同一份 <code>ir.json</code> 可以反复 <code>apply</code> 到不同 target，不用重扫 —— 大项目的 session JSONL 常常几十 MB。
+      同一份 <code>dossier.json</code> 可以反复 <code>apply</code> 到不同 target，不用重扫 —— 大项目的 session JSONL 常常几十 MB。
       想一把梭？<code>ccm migrate</code> 把 ② + ③ 串起来一次跑完。
     </p>
   </div>
@@ -1102,15 +1102,15 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .</code></pre>
     </div>
 
-    <p style="color:var(--text-dim);margin:14px 0 10px;"><strong>3 步走</strong> — 添加项目 → 导出为 IR → 按目标生成：</p>
+    <p style="color:var(--text-dim);margin:14px 0 10px;"><strong>3 步走</strong> — 添加项目 → 导出为档案 → 按目标生成：</p>
     <div class="qs-block">
-      <pre><code># ① 告诉工具项目在哪 + ② 自动识别 60+ 种数据 → 中间 IR
-ccm export --project /path/to/your-project --out ./ccm-output/ir.json
+      <pre><code># ① 告诉工具项目在哪 + ② 自动识别 60+ 种数据 → Workspace Dossier（项目档案）
+ccm export --project /path/to/your-project --out ./ccm-output/dossier.json
 
-# ③ 同一份 IR 生成任意目标（可反复跑，不必重扫）
-ccm apply --ir ./ccm-output/ir.json --target hermes   --out ./ccm-output
-ccm apply --ir ./ccm-output/ir.json --target opencode --out ./ccm-output
-ccm apply --ir ./ccm-output/ir.json --target cursor,windsurf --out ./ccm-output</code></pre>
+# ③ 同一份档案生成任意目标（可反复跑，不必重扫）
+ccm apply --dossier ./ccm-output/dossier.json --target hermes   --out ./ccm-output
+ccm apply --dossier ./ccm-output/dossier.json --target opencode --out ./ccm-output
+ccm apply --dossier ./ccm-output/dossier.json --target cursor,windsurf --out ./ccm-output</code></pre>
     </div>
 
     <p style="color:var(--text-dim);margin:14px 0 10px;">一次跑完（<code>export + apply</code> 打包）：</p>
@@ -1170,7 +1170,7 @@ cp -r claude-code-migration/skills/* ~/.claude/skills/</code></pre>
 
     <h3 style="margin: 40px 0 12px;font-size:17px;">测试</h3>
     <p style="color:var(--text-dim);margin-bottom:14px;">
-      仓库含 45 个端到端测试（format-level 验证 + 真实子进程执行 + 任意 source → IR → 任意 target 互迁）：
+      仓库含 45 个端到端测试（format-level 验证 + 真实子进程执行 + 任意 source → Dossier → 任意 target 互迁）：
     </p>
     <div class="qs-block">
       <pre><code>pip install pytest
@@ -1184,7 +1184,7 @@ pytest tests/             # 45 passed</code></pre>
     <div class="section-header">
       <span class="section-tag">ARCHITECTURE</span>
       <h2 class="section-title">生态全景</h2>
-      <p class="section-sub">不做 N×M 点对点迁移。所有源 parse 到 <strong>Canonical IR</strong>（中间层），所有目标从 IR 生成配置。新增任一 Agent 只需一个 parser 或 writer，自动获得和其他 Agent 的互通能力。</p>
+      <p class="section-sub">不做 N×M 点对点迁移。所有源 parse 到 <strong>Workspace Dossier</strong>（代码里叫 Canonical IR / CanonicalData），所有目标从同一份档案生成配置。新增任一 Agent 只需一个 parser 或 writer，自动获得和其他 Agent 的互通能力。</p>
     </div>
 
     <div class="eco-diagram">
@@ -1272,8 +1272,8 @@ pytest tests/             # 45 passed</code></pre>
         <!-- IR big hexagon-style card -->
         <g transform="translate(380,180)">
           <rect width="320" height="260" rx="16" class="eco-rect-ir" filter="url(#shadow)"/>
-          <text x="160" y="40" class="eco-ir-title" text-anchor="middle">⬡ Canonical IR</text>
-          <text x="160" y="60" class="eco-ir-sub" text-anchor="middle">src/canonical.py · v1.0</text>
+          <text x="160" y="40" class="eco-ir-title" text-anchor="middle">⬡ Workspace Dossier</text>
+          <text x="160" y="60" class="eco-ir-sub" text-anchor="middle">项目档案 · src/canonical.py · v1.0</text>
 
           <!-- Field list -->
           <text x="20" y="95" class="eco-ir-field">▸ Identity / Memory / Rules</text>
