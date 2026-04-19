@@ -15,6 +15,7 @@ See: https://github.com/agi-bar/neuDrive/blob/main/docs/reference.md
 """
 from __future__ import annotations
 
+import sys
 import httpx
 from dataclasses import dataclass
 from typing import Any
@@ -84,10 +85,22 @@ class NeuDriveHub:
                       json={"category": category, "content": content})
 
     def write_file(self, path: str, content: str) -> None:
-        """Write to virtual file tree (canonical paths per hubpath/)."""
+        """Write to virtual file tree (canonical paths per hubpath/).
+
+        Client-side validates the path to prevent accidental/malicious
+        traversal ('..' segments) or protocol injection; server-side should
+        validate too, but defense-in-depth.
+        """
         if not path.startswith("/"):
             path = "/" + path
-        self._request("PUT", f"/agent/tree{path}", json={"content": content})
+        if "\0" in path:
+            raise ValueError("Hub path contains NUL byte")
+        # Reject traversal / dot segments. Defense in depth — the server
+        # should also reject these, but we don't want to rely on it.
+        segments = [s for s in path.split("/") if s]
+        if any(seg in ("..", ".") for seg in segments):
+            raise ValueError(f"Hub path contains traversal segment: {path!r}")
+        self._request("PUT", f"/agent/tree/{'/'.join(segments)}", json={"content": content})
 
     def import_claude_memory(self, memories: list[dict[str, Any]]) -> dict[str, Any]:
         """Bulk-import Claude memory entries via dedicated endpoint."""
@@ -154,13 +167,14 @@ def push_scan_to_hub(
             stats["memory_files"] += 1
 
     # Skills → import_skill
+    errors: list[str] = []
     for skill in (scan.get("skills_global") or [])[:50]:
         files = {"SKILL.md": skill.get("body") or ""}
         try:
             hub.import_skill(f"cc-{skill['name']}", files)
             stats["skills_uploaded"] += 1
-        except httpx.HTTPError:
-            pass  # skip errors silently in MVP
+        except httpx.HTTPError as e:
+            errors.append(f"skill {skill.get('name','?')!r}: {type(e).__name__} {e}")
 
     # Cowork conversations → /conversations/cowork/<uuid>/conversation.md
     if cowork_export:
@@ -174,7 +188,17 @@ def push_scan_to_hub(
             try:
                 hub.write_file(path, "\n\n".join(lines))
                 stats["conversations_uploaded"] += 1
-            except httpx.HTTPError:
-                pass
+            except httpx.HTTPError as e:
+                errors.append(f"conversation {uuid[:8]}: {type(e).__name__} {e}")
+            except ValueError as e:  # path traversal guard tripped
+                errors.append(f"conversation {uuid[:8]}: invalid path — {e}")
+
+    if errors:
+        print(f"\n⚠️  {len(errors)} hub push error(s):", file=sys.stderr)
+        for msg in errors[:10]:
+            print(f"   · {msg}", file=sys.stderr)
+        if len(errors) > 10:
+            print(f"   · ... and {len(errors) - 10} more", file=sys.stderr)
+        stats["errors"] = len(errors)
 
     return stats

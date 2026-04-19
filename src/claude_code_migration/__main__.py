@@ -163,9 +163,53 @@ def _rehydrate_ir(d: dict[str, Any]) -> CanonicalData:
     return ir
 
 
+def _check_in_place_safety(proj: Path, force: bool) -> None:
+    """Guard --in-place writes: bail out if the target dir has uncommitted changes.
+
+    Rationale: --in-place writes AGENTS.md / .cursor/rules/ / .windsurfrules
+    into the user's real project. If the tree is dirty, a bad mapping will
+    silently overwrite work-in-progress without a clean rollback path.
+    """
+    import subprocess
+    if not (proj / ".git").exists() and not (proj.parent / ".git").exists():
+        # Not a git repo — can't safely do the check. Warn but allow.
+        print(f"⚠️  --in-place on a non-git dir ({proj}). Recommended: init git first.",
+              file=sys.stderr)
+        if not force:
+            raise SystemExit("Refusing --in-place on non-git dir. Pass --force to override.")
+        return
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(proj), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"⚠️  Could not check git status: {e}", file=sys.stderr)
+        if not force:
+            raise SystemExit("Refusing --in-place without git status. Pass --force to override.")
+        return
+    if r.returncode != 0:
+        print(f"⚠️  git status failed (rc={r.returncode}): {r.stderr.strip()}", file=sys.stderr)
+        if not force:
+            raise SystemExit("Refusing --in-place when git status fails. Pass --force to override.")
+        return
+    dirty = r.stdout.strip()
+    if dirty and not force:
+        print("❌ --in-place refuses to write into a dirty git tree:", file=sys.stderr)
+        for line in dirty.splitlines()[:10]:
+            print(f"   {line}", file=sys.stderr)
+        more = len(dirty.splitlines()) - 10
+        if more > 0:
+            print(f"   ... and {more} more", file=sys.stderr)
+        print("   Commit/stash changes, or re-run with --force to override.",
+              file=sys.stderr)
+        raise SystemExit(2)
+
+
 def _apply_ir(ir: CanonicalData, targets: list[str], out_dir: Path,
               in_place: bool, project_override: Path | None = None,
-              cowork_zip: str | None = None) -> list[tuple[str, Any]]:
+              cowork_zip: str | None = None,
+              force: bool = False) -> list[tuple[str, Any]]:
     """Step 3: IR → one or more targets. Returns (target_name, result) list."""
     out_dir.mkdir(parents=True, exist_ok=True)
     scan_d = ir.to_adapter_scan()
@@ -188,6 +232,10 @@ def _apply_ir(ir: CanonicalData, targets: list[str], out_dir: Path,
         p = Path(ir.source_project_dir)
         if p.is_dir():
             proj = p
+
+    # Safety: if caller asked for in-place, verify the target dir is safe
+    if in_place and proj:
+        _check_in_place_safety(proj, force=force)
 
     results: list[tuple[str, Any]] = []
     for t in targets:
@@ -278,6 +326,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         in_place=args.in_place,
         project_override=project_override,
         cowork_zip=args.cowork_zip,
+        force=getattr(args, "force", False),
     )
     _print_apply_summary(results, out_dir)
     return 0
@@ -317,6 +366,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
         in_place=args.in_place,
         project_override=proj,
         cowork_zip=args.cowork_zip,
+        force=getattr(args, "force", False),
     )
     _print_apply_summary(results, out_dir)
     return 0
@@ -379,6 +429,26 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_token(args: argparse.Namespace) -> str | None:
+    """Resolve neuDrive token with a preference order that avoids `ps aux` leaks.
+
+    Priority: --token-stdin > NEUDRIVE_TOKEN env > --token (with warning).
+    """
+    if getattr(args, "token_stdin", False):
+        return sys.stdin.readline().strip() or None
+    env_tok = os.environ.get("NEUDRIVE_TOKEN")
+    if env_tok:
+        return env_tok
+    if args.token:
+        print(
+            "⚠️  --token on the command line is visible in `ps aux` to other users. "
+            "Prefer $NEUDRIVE_TOKEN env var or --token-stdin.",
+            file=sys.stderr,
+        )
+        return args.token
+    return None
+
+
 def cmd_push_hub(args: argparse.Namespace) -> int:
     scan_path = Path(args.scan)
     if not scan_path.exists():
@@ -389,9 +459,13 @@ def cmd_push_hub(args: argparse.Namespace) -> int:
     if args.cowork_json:
         cowork_d = json.loads(Path(args.cowork_json).read_text())
 
-    token = args.token or os.environ.get("NEUDRIVE_TOKEN")
+    token = _resolve_token(args)
     if not token:
-        print("❌ --token or NEUDRIVE_TOKEN required", file=sys.stderr)
+        print(
+            "❌ No token. Pass one via NEUDRIVE_TOKEN env (recommended), "
+            "--token-stdin, or --token.",
+            file=sys.stderr,
+        )
         return 2
 
     with NeuDriveHub(base_url=args.api_base, token=token) as hub:
@@ -458,6 +532,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--in-place", action="store_true",
                     help="Write project-root files into the real project dir instead of "
                          "staging under out-dir. ⚠️  MODIFIES YOUR PROJECT — use on a clean branch.")
+    ap.add_argument("--force", action="store_true",
+                    help="Override --in-place git-clean safety check (dirty tree / non-git).")
     ap.set_defaults(func=cmd_apply)
 
     # One-shot · migrate (export + apply)
@@ -468,6 +544,8 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"Target(s), comma-separated. Options: {', '.join(ADAPTERS)}")
     mp.add_argument("--out", default="./ccm-output", help="Output dir")
     mp.add_argument("--in-place", action="store_true")
+    mp.add_argument("--force", action="store_true",
+                    help="Override --in-place git-clean safety check.")
     mp.set_defaults(func=cmd_migrate)
 
     # Legacy · scan (raw scanner dict)
@@ -484,7 +562,16 @@ def main(argv: list[str] | None = None) -> int:
     hp.add_argument("--scan", required=True, help="Path to scan.json")
     hp.add_argument("--cowork-json", help="Optional cowork.json")
     hp.add_argument("--api-base", default="https://www.neudrive.ai")
-    hp.add_argument("--token", help="neuDrive token (or NEUDRIVE_TOKEN env)")
+    hp.add_argument(
+        "--token",
+        help="neuDrive token — DISCOURAGED (visible in `ps aux`). "
+             "Prefer NEUDRIVE_TOKEN env or --token-stdin.",
+    )
+    hp.add_argument(
+        "--token-stdin",
+        action="store_true",
+        help="Read token from stdin (safe against `ps aux`).",
+    )
     hp.set_defaults(func=cmd_push_hub)
 
     args = p.parse_args(argv)

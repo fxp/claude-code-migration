@@ -137,21 +137,59 @@ def _parse_content_items(content: Any, artifact_store: dict[str, ParsedArtifact]
     return "\n\n".join(p for p in text_parts if p), "\n\n".join(thinking_parts)
 
 
+class ZipBombError(Exception):
+    """Raised when a ZIP entry would decompress beyond the safety cap."""
+
+
+# Per-entry uncompressed-size cap (500 MB). The real Anthropic export
+# ZIPs top out around ~50 MB of conversations.json even for heavy users;
+# this leaves plenty of headroom while still catching bombs.
+_MAX_ENTRY_BYTES = 500 * 1024 * 1024
+# Also cap compression ratio to catch nested-bomb tricks.
+_MAX_COMPRESSION_RATIO = 1000
+
+
 def parse_cowork_zip(zip_path: str | Path) -> CoworkExport:
-    """Parse a Claude.ai/Cowork export ZIP and return structured data."""
+    """Parse a Claude.ai/Cowork export ZIP and return structured data.
+
+    Hardening:
+      - Rejects entries whose uncompressed size exceeds _MAX_ENTRY_BYTES
+      - Rejects entries with absurd compression ratios (zip bomb tell)
+      - Rejects entries whose name contains `..` or starts with `/`
+      - Matches target filenames by exact basename, not endswith() prefix
+    """
     zp = Path(zip_path)
     if not zp.exists():
         raise FileNotFoundError(str(zp))
 
     with zipfile.ZipFile(zp) as z:
-        names = set(z.namelist())
+        # Validate every entry up-front
+        for info in z.infolist():
+            name = info.filename
+            if ".." in Path(name).parts or name.startswith("/") or name.startswith("\\"):
+                raise ZipBombError(f"Unsafe entry name in ZIP: {name!r}")
+            if info.file_size > _MAX_ENTRY_BYTES:
+                raise ZipBombError(
+                    f"ZIP entry {name!r} uncompressed size {info.file_size} "
+                    f"exceeds cap of {_MAX_ENTRY_BYTES} bytes"
+                )
+            if info.compress_size and info.file_size / max(info.compress_size, 1) > _MAX_COMPRESSION_RATIO:
+                raise ZipBombError(
+                    f"ZIP entry {name!r} compression ratio "
+                    f"{info.file_size // max(info.compress_size,1)}× exceeds {_MAX_COMPRESSION_RATIO}× — "
+                    "refusing to decompress (suspected zip bomb)"
+                )
 
-        def _load(name: str) -> Any:
-            matches = [n for n in names if n.endswith(name)]
-            if not matches:
-                return None
-            with z.open(matches[0]) as f:
-                return json.loads(f.read())
+        infos = {info.filename: info for info in z.infolist()}
+
+        def _load(target_basename: str) -> Any:
+            # Match by exact basename, not endswith — prevents
+            # "evilconversations.json" or "../conversations.json" tricks.
+            for name, info in infos.items():
+                if Path(name).name == target_basename:
+                    with z.open(info) as f:
+                        return json.loads(f.read())
+            return None
 
         conversations_raw = _load("conversations.json") or []
         projects_raw = _load("projects.json") or []

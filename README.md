@@ -95,6 +95,16 @@ ccm push-hub --scan   ./ccm-output/scan.json --token $NEUDRIVE_TOKEN
 **为什么分三步？** 一次 `export` 后，`apply` 可以针对不同 target 反复跑，而不用再扫一遍
 （大项目的 session JSONL 常常几十 MB）。IR 是审计 / 版本控制友好的纯 JSON。
 
+**关于安全性**：写盘的 `ir.json` / `scan.json` 自动完成：
+- **明文密钥 redact**：MCP headers 里的 Bearer、环境变量里的 `*_API_KEY`、会话正文/历史里粘贴的
+  `sk-ant-*` / `ghp_*` / `AKIA*` / PEM private keys / BigModel `32hex.16alnum` 全部替换为
+  `${CC_<PATH>}` 占位符，adapters 会把这些占位符原样传到 target config（运行时读 env）。
+- **文件权限 0o600**：user-only，防止共享机器上其他账户 `cat` 走。
+- **同目录生成 `*.secrets-manifest.json`**：只含 SHA256 前缀和建议 env var 名，不含原文；
+  可以用来审计"这次导出哪些密钥被脱敏了"。
+- 即便是经过脱敏，IR 仍然包含 session 正文、shell 快照等隐私内容 —— **不建议 commit 到公共仓库**。
+  自用备份 / 本地迁移是完全安全的。
+
 ### 安全默认
 
 ⚠️ 默认 **不动你的真实项目目录**。所有产物包括那些"本应放到项目根"的文件（`.cursor/rules/`, `.windsurfrules`, `AGENTS.md`, `.hermes.md`）都被 staging 到 `<out>/<target>-target/<project-name>/` 下。
