@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from claude_code_migration.hub import NeuDriveHub, push_scan_to_hub
+from claude_code_migration.neudrive import NeuDriveHub, push_scan_to_hub
 
 
 # ── Mock server ──────────────────────────────────────────────────────

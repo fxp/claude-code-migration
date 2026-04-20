@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from claude_code_migration.cowork import parse_cowork_zip, ZipBombError
-from claude_code_migration.hub import NeuDriveHub
+from claude_code_migration.neudrive import NeuDriveHub
 
 
 # ── H2 + M9 · ZIP hardening ─────────────────────────────────────────

@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-04-20
+
+Folds the standalone [`dossier-hub`](https://github.com/fxp/dossier-hub)
+project into this one as an optional subpackage (`claude_code_migration.hub`)
+and subcommand group (`ccm hub ...`). One install, one CLI, one docs site.
+
+**Non-breaking**: the `ccm` 3-step CLI (export / apply / migrate / scan /
+push-hub / panic-backup) is unchanged. The hub feature is gated behind an
+optional dep group — `pip install 'claude-code-migration[hub]'`.
+
+### Added
+
+- **`ccm hub` subcommand group** — always-on hub mode integrated as a
+  sibling of the existing migration verbs. Verbs:
+  - `ccm hub init` — create `~/.dossier-hub/buffer.db` + sample config
+  - `ccm hub serve` — run the daemon (`--local-only` / `--remote` / `--dry-run`)
+  - `ccm hub status` — outbox size, dead-letter count, mirror water-mark
+  - `ccm hub migrate` — apply `sql/*.sql` schema to your Supabase project
+  - `ccm hub bootstrap` — first-run Supabase → L4 mirror pull
+  - `ccm hub drain-once` — one-shot outbox flush
+- **New subpackage `claude_code_migration.hub`** — ~1 200 LOC moved in:
+  - `buffer.py` — L4 SQLite outbox + mirror + self-contained FTS5
+  - `drain.py` — async worker with exponential backoff + dead-letter
+  - `mirror.py` — Supabase Realtime subscriber + delta_resync
+  - `redact.py` — capture middleware wrapping the existing ccm redactor,
+    accumulates findings for later vault upload
+  - `daemon.py` — `HubDaemon` / `HubConfig` orchestrating captures + workers
+  - `supabase_client.py` — `HubClient` protocol + InMemory (tests) /
+    DryRun (stderr) / real SupabaseClient implementations
+  - `captures/base.py` + `captures/claude_code_fs.py` — plugin base class
+    + real-time tailer for `~/.claude/projects/<enc>/*.jsonl` with
+    byte-offset-tracked incremental reads, daemon-restart resume, and
+    partial-line tolerance.
+- **20 dossier tables + RLS + pgvector/tsvector + RPC functions** bundled
+  as SQL migrations under `hub/sql/` (shipped as package-data so
+  `ccm hub migrate` finds them in wheel installs).
+- **37 new tests** covering the hub subsystem (buffer, drain, capture,
+  redactor middleware, offline-integration). Total: 92 → **129** passing.
+- **`docs/HUB_ARCHITECTURE.md`** explaining the layered design (L1 + L2
+  Supabase / L3 hub-agent / L4 SQLite buffer).
+
+### Changed
+
+- Existing `claude_code_migration.hub` module → renamed to
+  `claude_code_migration.neudrive` to make room for the new subpackage.
+  Public import surface unchanged (both `NeuDriveHub` and
+  `push_scan_to_hub` keep working), but internal imports and
+  `tests/test_hub.py` → `tests/test_neudrive_client.py`.
+- `pyproject.toml`: new `[hub]` extra depending on `watchdog>=4.0`,
+  `supabase>=2.5`, `psycopg[binary]>=3.1`. Core `ccm` keeps only its
+  minimal `httpx>=0.27` dep, so users who only ever migrate can skip the
+  larger deps.
+- Keyword list expanded (`claude-desktop`, `supabase`, `hub`, `always-on`).
+
+### Fixed
+
+Two bugs caught during the merge + live smoke:
+
+- SQLite FTS5 external-content tables (`content=..., content_rowid=...`)
+  weren't syncing via `insert or replace` — rewrote as self-contained
+  FTS5 tables with explicit INSERT/DELETE inside `mirror_upsert` /
+  `mirror_delete`, wrapped in a single transaction.
+- `f.tell()` inside a `for line in f` loop is forbidden in text mode
+  — rewrote the JSONL tailer as a `readline()` loop for byte-accurate
+  resume.
+
 ## [1.0.0] — 2026-04-20
 
 Stable 1.0 release. Same code as v0.2.1 — the version that has been
@@ -167,7 +233,8 @@ Initial proof of concept. Single source (Claude Code) → four targets
 session capture. Legacy `ccm scan` + `ccm migrate` CLI. neuDrive Hub
 HTTP client.
 
-[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/fxp/claude-code-migration/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/fxp/claude-code-migration/releases/tag/v1.1.0
 [1.0.0]: https://github.com/fxp/claude-code-migration/releases/tag/v1.0.0
 [0.2.1]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fxp/claude-code-migration/releases/tag/v0.2.0

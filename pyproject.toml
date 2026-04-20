@@ -4,16 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-code-migration"
-version = "1.0.0"
-description = "Migrate Claude Code / Chat / Cowork workspaces to Hermes / OpenCode / Cursor / Windsurf via a vendor-neutral Workspace Dossier"
+version = "1.1.0"
+description = "Migrate Claude Code / Chat / Cowork to Hermes / OpenCode / Cursor / Windsurf via a vendor-neutral Workspace Dossier — or run it as an always-on hub so every agent reads the same live data"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Xiaoping Feng", email = "fxp007@gmail.com" }]
 requires-python = ">=3.11"
 keywords = [
-    "claude", "claude-code", "migration", "workspace-dossier",
-    "hermes", "opencode", "cursor", "windsurf", "neudrive",
-    "agent", "llm", "mcp", "vendor-neutral",
+    "claude", "claude-code", "claude-desktop", "migration", "workspace-dossier",
+    "hermes", "opencode", "cursor", "windsurf", "neudrive", "supabase",
+    "agent", "llm", "mcp", "vendor-neutral", "hub", "always-on",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,6 +37,13 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7", "pytest-cov"]
 dev = ["pytest>=7", "pytest-cov", "ruff"]
+# Hub mode dependencies — fsnotify for local captures, supabase-py for
+# the cloud backend, psycopg for `ccm hub migrate` schema pushes.
+hub = [
+    "watchdog>=4.0",
+    "supabase>=2.5",
+    "psycopg[binary]>=3.1",
+]
 
 [project.scripts]
 claude-code-migration = "claude_code_migration.__main__:main"
@@ -52,7 +59,11 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 claude_code_migration = ["py.typed"]
+"claude_code_migration.hub" = ["py.typed", "sql/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: end-to-end tests exercising multiple components",
+]

@@ -29,7 +29,7 @@ from .cowork import parse_cowork_zip
 from .secrets import scan_secrets
 from .redactor import redact, to_manifest
 from .adapters import ADAPTERS, get_adapter
-from .hub import NeuDriveHub, push_scan_to_hub
+from .neudrive import NeuDriveHub, push_scan_to_hub
 from .sources import SOURCES, get_source
 
 
@@ -582,6 +582,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Read token from stdin (safe against `ps aux`).",
     )
     hp.set_defaults(func=cmd_push_hub)
+
+    # Hub subcommand group (always-on hub mode).
+    # The `hub` subpackage lives under claude_code_migration/ and registers
+    # nested subparsers — `ccm hub init`, `ccm hub serve`, etc.
+    # Imports that require optional deps (watchdog / supabase / psycopg) are
+    # deferred to execution time, so the import below is lightweight.
+    try:
+        from .hub.__main__ import add_hub_subparser
+        add_hub_subparser(sub)
+    except Exception as e:   # pragma: no cover
+        # If hub deps are broken, don't prevent the rest of ccm from working.
+        print(f"⚠️  hub subcommand unavailable: {e}", file=sys.stderr)
 
     args = p.parse_args(argv)
     return args.func(args)
