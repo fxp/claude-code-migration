@@ -249,6 +249,26 @@ def parse(project_dir: str | Path | None = None,
         "worktreeinclude": d.get("worktreeinclude") or [],
     }
 
+    # CLAUDE.md discovery tree — 2026 spec expansion (alt project loc, ancestors,
+    # subdirs, @imports, managed policy). These live in raw_archive so target
+    # adapters can archive them verbatim under _archive/claude-md-tree/ without
+    # trying to fold multi-source CLAUDE.md files into a single AGENTS.md — the
+    # concatenation semantics depend on runtime cwd and we shouldn't flatten.
+    claude_md_tree: dict[str, Any] = {}
+    if d.get("project_claude_md_dotclaude"):
+        claude_md_tree["project_dotclaude"] = d["project_claude_md_dotclaude"]
+    if d.get("ancestor_claude_mds"):
+        claude_md_tree["ancestors"] = d["ancestor_claude_mds"]
+    if d.get("subdir_claude_mds"):
+        claude_md_tree["subdirs"] = d["subdir_claude_mds"]
+    if d.get("claude_md_imports"):
+        claude_md_tree["imports"] = d["claude_md_imports"]
+    if d.get("managed_claude_md"):
+        claude_md_tree["managed_policy"] = {
+            "path": d.get("managed_claude_md_path"),
+            "content": d["managed_claude_md"],
+        }
+
     # Lossless preservation of everything else we don't canonicalize
     ir.raw_archive = {
         "history": d.get("history") or [],
@@ -260,6 +280,7 @@ def parse(project_dir: str | Path | None = None,
         "session_envs": d.get("session_envs") or [],
         "file_history": d.get("file_history") or [],
         "mcp_needs_auth": d.get("mcp_needs_auth") or {},
+        "claude_md_tree": claude_md_tree,
         # Session sidecars aren't fully captured by conversations (tool-results map
         # + subagent transcripts are needed to fully reconstruct tool-call chains).
         "session_sidecars": [

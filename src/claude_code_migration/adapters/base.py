@@ -126,6 +126,59 @@ def write_archive(
                      encoding="utf-8")
         written.append(str(p))
 
+    # CLAUDE.md discovery tree — the 2026 spec loads CLAUDE.md from 5 different
+    # locations (alt project dir, ancestors, subdirs, @imports, managed policy)
+    # and the load order depends on cwd at runtime. We archive each bucket
+    # verbatim under _archive/claude-md-tree/ so the user can audit which files
+    # were picked up and re-map manually if the target agent has a different
+    # discovery rule.
+    tree = scan.get("claude_md_tree") or {}
+    if tree:
+        tree_dir = ensure_dir(archive / "claude-md-tree")
+        tree_index: list[str] = [
+            "# CLAUDE.md Discovery Tree",
+            "",
+            "Claude Code (per 2026 spec) loads CLAUDE.md files from multiple",
+            "locations. Each bucket below was captured at export time; the load",
+            "order depends on runtime cwd so we don't flatten them.",
+            "",
+        ]
+        if tree.get("project_dotclaude"):
+            p = tree_dir / "project_dotclaude.md"
+            p.write_text(tree["project_dotclaude"], encoding="utf-8")
+            written.append(str(p))
+            tree_index.append("- `project_dotclaude.md` — content of `./.claude/CLAUDE.md`")
+        for i, m in enumerate(tree.get("ancestors") or []):
+            p = tree_dir / f"ancestor_{i:02d}_{Path(m['path']).parent.name or 'root'}.md"
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — from `{m['path']}`")
+        for m in tree.get("subdirs") or []:
+            rel = m["file"].replace("subdir:", "")
+            safe = rel.replace("/", "__")
+            p = tree_dir / f"subdir_{safe}"
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — lazy-loaded from `{rel}`")
+        for m in tree.get("imports") or []:
+            tok = m["file"].replace("@import:", "")
+            safe = tok.replace("/", "__").lstrip(".~")
+            p = tree_dir / f"import_{safe}"
+            if not p.suffix:
+                p = p.with_suffix(".md")
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — via `@{tok}`")
+        if tree.get("managed_policy"):
+            mp = tree["managed_policy"]
+            p = tree_dir / "managed_policy.md"
+            p.write_text(mp.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `managed_policy.md` — enterprise policy from `{mp.get('path')}`")
+        idx = tree_dir / "INDEX.md"
+        idx.write_text("\n".join(tree_index) + "\n", encoding="utf-8")
+        written.append(str(idx))
+
     # Secret manifest (SHA256 hashes only, no raw values — safe to commit)
     try:
         from ..secrets import scan_secrets

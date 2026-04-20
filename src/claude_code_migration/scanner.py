@@ -233,6 +233,18 @@ class ClaudeScan:
     session_envs: list[SessionEnv] = field(default_factory=list)
     file_history: list[FileHistoryEntry] = field(default_factory=list)
     mcp_needs_auth: dict[str, Any] = field(default_factory=dict)
+    # ── CLAUDE.md discovery tree (per 2026 spec, code.claude.com/docs/en/memory) ──
+    # Alternate project-level location: ./.claude/CLAUDE.md
+    project_claude_md_dotclaude: str | None = None
+    # Ancestor walk: CLAUDE.md / CLAUDE.local.md from each parent dir up to repo/fs root
+    ancestor_claude_mds: list[MemoryFile] = field(default_factory=list)
+    # Subdirectory CLAUDE.md files (lazy-loaded by Claude Code on file access)
+    subdir_claude_mds: list[MemoryFile] = field(default_factory=list)
+    # Files pulled in via @path imports (recursive, max depth 5, per spec)
+    claude_md_imports: list[MemoryFile] = field(default_factory=list)
+    # Enterprise managed-policy CLAUDE.md (OS-specific path, cannot be excluded)
+    managed_claude_md: str | None = None
+    managed_claude_md_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         # Convert McpServer objects in dicts
@@ -247,6 +259,145 @@ def _read_safe(p: Path) -> str | None:
         return None
     except Exception:
         return None
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# CLAUDE.md discovery (per 2026 spec, code.claude.com/docs/en/memory)
+# ──────────────────────────────────────────────────────────────────────────
+
+_IMPORT_RE = re.compile(r"(?:^|\s)@([^\s\n`'\"]+)")
+_IMPORT_MAX_DEPTH = 5  # per spec
+
+
+def _managed_claude_md_path() -> Path | None:
+    """Return the managed-policy CLAUDE.md path for this OS, or None if the
+    current platform has no such concept."""
+    import platform, sys
+    system = platform.system()
+    if system == "Darwin":
+        return Path("/Library/Application Support/ClaudeCode/CLAUDE.md")
+    if system == "Windows" or sys.platform.startswith("win"):
+        return Path(r"C:\Program Files\ClaudeCode\CLAUDE.md")
+    # Linux + WSL (treat all other POSIX as Linux-style)
+    return Path("/etc/claude-code/CLAUDE.md")
+
+
+def _walk_ancestor_claude_mds(proj: Path) -> list[MemoryFile]:
+    """Walk upward from ``proj`` collecting CLAUDE.md + CLAUDE.local.md at each
+    ancestor directory. Matches Claude Code's concatenation semantics — every
+    discovered file is loaded, more specific locations (closer to proj) listed
+    last so they take precedence in downstream concatenation."""
+    out: list[MemoryFile] = []
+    cur = proj.parent
+    seen: set[Path] = set()
+    # Walk up until fs root; cap at 12 hops as a safety net
+    for _ in range(12):
+        if cur in seen or cur == cur.parent:
+            break
+        seen.add(cur)
+        for name in ("CLAUDE.md", "CLAUDE.local.md"):
+            f = cur / name
+            if f.is_file():
+                text = _read_safe(f) or ""
+                meta, _ = _parse_frontmatter(text)
+                out.append(MemoryFile(
+                    file=f"ancestor:{f}",
+                    path=str(f),
+                    type=meta.get("type") or "ancestor-claude-md",
+                    content=text,
+                    frontmatter=meta,
+                ))
+        cur = cur.parent
+    # Reverse: farthest ancestor first (matches load order semantically)
+    return list(reversed(out))
+
+
+def _walk_subdir_claude_mds(proj: Path, max_files: int = 200) -> list[MemoryFile]:
+    """Enumerate CLAUDE.md files inside ``proj`` (lazy-loaded by Claude Code).
+    Skips node_modules / .git / .venv etc. Capped at ``max_files`` so a
+    pathological repo doesn't explode the scan."""
+    out: list[MemoryFile] = []
+    SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__",
+                 ".next", ".nuxt", "dist", "build", "target", ".tox",
+                 ".mypy_cache", ".pytest_cache", ".claude"}  # .claude handled separately
+    for root, dirs, files in os.walk(proj):
+        # in-place prune
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        root_p = Path(root)
+        # Skip the project root itself (handled by scan.claude_md / claude_local_md)
+        if root_p == proj:
+            continue
+        for name in ("CLAUDE.md", "CLAUDE.local.md"):
+            if name in files:
+                f = root_p / name
+                text = _read_safe(f) or ""
+                meta, _ = _parse_frontmatter(text)
+                rel = f.relative_to(proj)
+                out.append(MemoryFile(
+                    file=f"subdir:{rel}",
+                    path=str(f),
+                    type=meta.get("type") or "subdir-claude-md",
+                    content=text,
+                    frontmatter=meta,
+                ))
+                if len(out) >= max_files:
+                    return out
+    return out
+
+
+def _expand_claude_md_imports(seed_files: list[tuple[Path, str]],
+                              depth: int = _IMPORT_MAX_DEPTH) -> list[MemoryFile]:
+    """Recursively resolve ``@path`` import tokens in CLAUDE.md-style text.
+
+    Per spec (code.claude.com/docs/en/memory):
+      - Both relative and absolute paths are allowed.
+      - Relative paths resolve against the file containing the import.
+      - Imported files can import further, capped at 5 hops.
+      - Imports inside code fences are NOT expanded; we match outside them.
+
+    ``seed_files`` is a list of (path, content) tuples to start from.
+    """
+    out: list[MemoryFile] = []
+    seen: set[Path] = set()
+    queue: list[tuple[Path, str, int]] = [(p, c, 0) for p, c in seed_files]
+    while queue:
+        containing, text, hop = queue.pop(0)
+        if hop >= depth:
+            continue
+        # Strip fenced code blocks so we don't match @foo inside triple-backticks
+        stripped = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+        stripped = re.sub(r"`[^`\n]*`", "", stripped)  # inline code too
+        for m in _IMPORT_RE.finditer(stripped):
+            token = m.group(1).rstrip(".,;:)")  # trim punctuation
+            # Skip e.g. email addresses ("@foo" in an email) and bare words
+            # with no path separator + no extension — heuristic that matches
+            # spec examples (`@README`, `@package.json`, `@docs/git-instructions.md`,
+            # `@~/.claude/foo.md`).
+            if "/" not in token and "." not in token and not token.startswith("~"):
+                continue
+            # Resolve path
+            p_str = token
+            if p_str.startswith("~"):
+                target = Path(p_str).expanduser()
+            elif p_str.startswith("/"):
+                target = Path(p_str)
+            else:
+                target = (containing.parent / p_str).resolve()
+            if target in seen or not target.is_file():
+                continue
+            seen.add(target)
+            content = _read_safe(target) or ""
+            meta, _ = _parse_frontmatter(content)
+            out.append(MemoryFile(
+                file=f"@import:{token}",
+                path=str(target),
+                type=meta.get("type") or "claude-md-import",
+                content=content,
+                frontmatter=meta,
+            ))
+            # Recurse
+            queue.append((target, content, hop + 1))
+    return out
 
 
 def _load_json_safe(p: Path) -> dict[str, Any]:
@@ -414,6 +565,13 @@ def scan_claude_code(
     # ~/.claude/CLAUDE.md
     scan.home_claude_md = _read_safe(claude_home / "CLAUDE.md")
 
+    # Enterprise managed-policy CLAUDE.md — OS-specific, cannot be excluded
+    # (per Claude Code 2026 spec §Deploy organization-wide CLAUDE.md)
+    mp_path = _managed_claude_md_path()
+    if mp_path and mp_path.is_file():
+        scan.managed_claude_md_path = str(mp_path)
+        scan.managed_claude_md = _read_safe(mp_path)
+
     # Global settings
     scan.settings_global = _load_json_safe(claude_home / "settings.json")
     scan.settings_local = _load_json_safe(claude_home / "settings.local.json")
@@ -536,10 +694,30 @@ def scan_claude_code(
 
     # Project-specific data
     if proj:
-        # CLAUDE.md variants
+        # CLAUDE.md variants — per 2026 spec, both ./CLAUDE.md AND
+        # ./.claude/CLAUDE.md are valid project locations
         scan.claude_md = _read_safe(proj / "CLAUDE.md")
         scan.claude_local_md = _read_safe(proj / "CLAUDE.local.md")
+        scan.project_claude_md_dotclaude = _read_safe(proj / ".claude" / "CLAUDE.md")
         scan.review_md = _read_safe(proj / "REVIEW.md")
+
+        # Ancestor walk: Claude Code loads CLAUDE.md from every parent dir
+        scan.ancestor_claude_mds = _walk_ancestor_claude_mds(proj)
+        # Subdirectory CLAUDE.md (lazy-loaded, but archival-worthy)
+        scan.subdir_claude_mds = _walk_subdir_claude_mds(proj)
+
+        # @import expansion — recursive, depth ≤ 5
+        seed: list[tuple[Path, str]] = []
+        if scan.claude_md:
+            seed.append((proj / "CLAUDE.md", scan.claude_md))
+        if scan.claude_local_md:
+            seed.append((proj / "CLAUDE.local.md", scan.claude_local_md))
+        if scan.project_claude_md_dotclaude:
+            seed.append((proj / ".claude" / "CLAUDE.md", scan.project_claude_md_dotclaude))
+        for mf in scan.ancestor_claude_mds:
+            seed.append((Path(mf.path), mf.content))
+        if seed:
+            scan.claude_md_imports = _expand_claude_md_imports(seed)
 
         # .worktreeinclude
         wt = proj / ".worktreeinclude"
