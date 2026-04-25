@@ -5,6 +5,137 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
 
 ## [Unreleased]
 
+### Added
+
+- **2026 surface area coverage beyond CLAUDE.md** — picks up the rest of
+  `~/.claude/` and per-plugin data documented at
+  <https://code.claude.com/docs/en/claude-directory>:
+  - **Slash commands** — `~/.claude/commands/**/*.md` and
+    `<proj>/.claude/commands/**/*.md`. Subdirectories namespace commands
+    (e.g. `frontend/test.md` → `/frontend:test`). Frontmatter fields
+    `description` / `allowed-tools` / `argument-hint` are surfaced
+    explicitly for adapter convenience.
+  - **Themes** — `~/.claude/themes/*` captured verbatim (file format
+    intentionally unspecified by the spec).
+  - **Keybindings** — `~/.claude/keybindings.json` preserved as-is.
+  - **Plugin `bin/` executables** (Week 14, v2.1.91) — files inside a
+    plugin's `bin/` directory are PATH-injected by Claude Code while
+    the plugin is enabled. Captured per-plugin so target users know
+    what binaries the agent expected on PATH.
+  - **Plugin-bundled commands** — `<plugin>/commands/**/*.md` (prefixed
+    with plugin name).
+  - **Plugin-bundled agents** — `<plugin>/agents/*.md` (prefixed with
+    plugin name).
+- **Adapter `_archive/claude-extras/`** — every captured bucket lands as
+  a readable file with reconstructed frontmatter so a user can hand-port
+  individual commands/themes/bindings into a target agent that has an
+  equivalent. `INDEX.md` lists each artifact and its origin.
+- 7 new tests in `tests/test_claude_extras.py` covering namespacing, prefix
+  injection, plugin `bin/`, end-to-end scan into a fake CLAUDE_CONFIG_DIR,
+  and adapter archive output. Suite: 136 → 143 passing.
+
+- **2026 CLAUDE.md discovery spec coverage** — scanner now matches the load
+  semantics documented at <https://code.claude.com/docs/en/memory>:
+  - `./.claude/CLAUDE.md` — alternate project-level location (was silently
+    missed when a user put instructions there instead of `./CLAUDE.md`)
+  - **Ancestor walk** — CLAUDE.md + CLAUDE.local.md from every parent
+    directory up to fs root (Claude Code concatenates all of them)
+  - **Subdirectory enumeration** — CLAUDE.md files inside the project that
+    Claude Code lazy-loads; previously invisible to the migration
+  - **`@path` import expansion** — recursive up to 5 hops per spec, with
+    fenced-code-block detection so `@foo` inside a triple-backtick example
+    is not mistakenly imported
+  - **Enterprise managed-policy CLAUDE.md** — OS-specific path
+    (`/Library/Application Support/ClaudeCode/CLAUDE.md` on macOS,
+    `/etc/claude-code/CLAUDE.md` on Linux/WSL,
+    `C:\Program Files\ClaudeCode\CLAUDE.md` on Windows)
+- **Adapter `_archive/claude-md-tree/`** — every discovered CLAUDE.md bucket
+  lands in a readable per-file dump with an `INDEX.md` explaining origin.
+  We don't flatten — concatenation order depends on runtime cwd, so the
+  user re-composes manually if the target agent has different discovery
+  rules.
+- `tests/test_claude_md_discovery.py` — 8 tests covering every new branch
+  (including depth-limit and fenced-code guard). Suite: 128 → 136 passing.
+
+### Verified
+
+- Against a complex real-world project, 3 subdirectory CLAUDE.md files that
+  were previously silently dropped now land in the dossier and
+  `_archive/claude-md-tree/` of every target.
+
+## [1.2.0] — 2026-04-19
+
+Turns the L4 mirror into a queryable MCP surface so any agent (Claude Code,
+Cursor, Codex CLI, OpenCode, Windsurf) can read the user's Workspace Dossier
+without a network hop. This is the step that makes hub mode "通" — before
+1.2.0, data flowed in; now it flows back out.
+
+### Added
+
+- **`ccm hub mcp-serve`** — stdio MCP server (JSON-RPC 2.0) that exposes the
+  local SQLite mirror as a tool surface. Read-only by design: writes must go
+  through captures so they pass through the redactor. Startup requires no
+  network — works on an airplane, works before Supabase is configured.
+  - `--list` flag dumps tool schemas as JSON (no server spawn), useful for
+    wiring the server into a client `mcp_config.json`.
+  - `--allow-empty` lets you start the server against a fresh buffer (handy
+    for demos; normally you'd run `ccm hub serve` first to populate it).
+- **New subpackage `claude_code_migration.hub.mcp`** — the MCP implementation:
+  - `server.py` — single-threaded JSON-RPC 2.0 dispatcher over line-delimited
+    stdio. Implements `initialize`, `ping`, `tools/list`, `tools/call`,
+    `shutdown`, and silently ignores `notifications/*`. Errors map to the
+    standard JSON-RPC codes (`-32700` parse / `-32600` invalid request /
+    `-32601` method-not-found / `-32602` invalid params / `-32603` internal).
+  - `tools.py` — 14 tools out of the box:
+    - `search_memory` — FTS5 over memory items, optional `kind` filter
+    - `read_profile` — user-profile memory items (ex. `~/.claude/CLAUDE.md`)
+    - `list_memory`, `read_memory` — enumerate / dereference memory items
+    - `list_skills`, `read_skill` — skills index + full body+frontmatter
+    - `list_agents` — subagents with model + description
+    - `list_hooks` — event / matcher / command / scope
+    - `list_mcp_endpoints` — configured MCP servers (stdio + SSE)
+    - `list_projects`, `get_project` — project cards + prompt templates
+    - `search_conversations` — FTS5 over messages with highlight snippets
+    - `get_conversation` — one conversation's ordered message stream
+    - `get_stats` — buffer row counts + outbox size + water-mark
+  - `ToolRegistry` / `Tool` types — pluggable; additional captures can
+    register new tools at daemon boot.
+- **41 new tests** (`tests/test_hub_mcp.py`) covering tool dispatch,
+  JSON-RPC parsing, every error code, `initialize` / `tools/list` /
+  `tools/call` end-to-end over StringIO, and the CLI `--list` path via
+  subprocess. Suite is now **180 passing**.
+- `McpServer` and `build_default_registry` re-exported from
+  `claude_code_migration.hub` for Python-API users.
+
+### Fixed
+
+- **`claude_code_fs.py`: watchdog is now a soft import.** Previously the
+  capture module raised `RuntimeError("watchdog is required")` at import
+  time, which cascaded through `captures/__init__.py` → `daemon.py` →
+  `hub/__main__.py` and disabled the entire `ccm hub` subcommand group
+  when the `[hub]` extra wasn't installed. Now the import silently
+  degrades; `ClaudeCodeFSCapture.start()` is the only place that fails,
+  and it fails with an actionable message. `ccm hub init` /
+  `ccm hub mcp-serve` / `ccm hub status` now work with just the base
+  install.
+
+### Design notes
+
+The MCP surface is deliberately **read-only**. Every tool reads from L4
+mirror tables — never the network, never the source-of-truth Supabase
+rows. This has three properties:
+
+1. **Offline-first**: the MCP server keeps answering queries on an
+   airplane or in a CI sandbox; only the data freshness depends on the
+   mirror's last sync.
+2. **Zero secret leak**: the `dossier_vault_entries` table is *never*
+   mirrored to L4 by design, so no MCP tool can expose it even by
+   accident. Secret reads will go through a separate authenticated path
+   when/if we ship a vault tool.
+3. **Redaction is enforced at ingest**: writes flow capture → redactor →
+   outbox → Supabase → realtime → mirror. By the time the MCP surface
+   sees a row, it has already been scrubbed.
+
 ## [1.1.0] — 2026-04-20
 
 Folds the standalone [`dossier-hub`](https://github.com/fxp/dossier-hub)

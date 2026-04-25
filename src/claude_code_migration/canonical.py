@@ -345,6 +345,15 @@ class CanonicalData:
             "plugins_installed": self.settings.get("plugins_installed"),
             "history_count": self.settings.get("history_count") or 0,
             "worktreeinclude": self.settings.get("worktreeinclude") or [],
+            # CLAUDE.md discovery tree (2026 spec expansion — alt project loc,
+            # ancestors, subdirs, @imports, managed policy). Adapters archive
+            # this verbatim rather than flattening, since Claude Code's
+            # concatenation depends on runtime cwd.
+            "claude_md_tree": (self.raw_archive or {}).get("claude_md_tree") or {},
+            # Other 2026 surface area: slash commands, themes, keybindings,
+            # plugin bin/. Adapters archive these too — most targets either
+            # have no equivalent (themes, bin/) or a different one (commands).
+            "claude_extras": (self.raw_archive or {}).get("claude_extras") or {},
         }
         # First Project's context → main CLAUDE.md
         if self.projects:

@@ -126,6 +126,146 @@ def write_archive(
                      encoding="utf-8")
         written.append(str(p))
 
+    # CLAUDE.md discovery tree — the 2026 spec loads CLAUDE.md from 5 different
+    # locations (alt project dir, ancestors, subdirs, @imports, managed policy)
+    # and the load order depends on cwd at runtime. We archive each bucket
+    # verbatim under _archive/claude-md-tree/ so the user can audit which files
+    # were picked up and re-map manually if the target agent has a different
+    # discovery rule.
+    tree = scan.get("claude_md_tree") or {}
+    if tree:
+        tree_dir = ensure_dir(archive / "claude-md-tree")
+        tree_index: list[str] = [
+            "# CLAUDE.md Discovery Tree",
+            "",
+            "Claude Code (per 2026 spec) loads CLAUDE.md files from multiple",
+            "locations. Each bucket below was captured at export time; the load",
+            "order depends on runtime cwd so we don't flatten them.",
+            "",
+        ]
+        if tree.get("project_dotclaude"):
+            p = tree_dir / "project_dotclaude.md"
+            p.write_text(tree["project_dotclaude"], encoding="utf-8")
+            written.append(str(p))
+            tree_index.append("- `project_dotclaude.md` — content of `./.claude/CLAUDE.md`")
+        for i, m in enumerate(tree.get("ancestors") or []):
+            p = tree_dir / f"ancestor_{i:02d}_{Path(m['path']).parent.name or 'root'}.md"
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — from `{m['path']}`")
+        for m in tree.get("subdirs") or []:
+            rel = m["file"].replace("subdir:", "")
+            safe = rel.replace("/", "__")
+            p = tree_dir / f"subdir_{safe}"
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — lazy-loaded from `{rel}`")
+        for m in tree.get("imports") or []:
+            tok = m["file"].replace("@import:", "")
+            safe = tok.replace("/", "__").lstrip(".~")
+            p = tree_dir / f"import_{safe}"
+            if not p.suffix:
+                p = p.with_suffix(".md")
+            p.write_text(m.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `{p.name}` — via `@{tok}`")
+        if tree.get("managed_policy"):
+            mp = tree["managed_policy"]
+            p = tree_dir / "managed_policy.md"
+            p.write_text(mp.get("content", ""), encoding="utf-8")
+            written.append(str(p))
+            tree_index.append(f"- `managed_policy.md` — enterprise policy from `{mp.get('path')}`")
+        idx = tree_dir / "INDEX.md"
+        idx.write_text("\n".join(tree_index) + "\n", encoding="utf-8")
+        written.append(str(idx))
+
+    # Custom slash commands, themes, keybindings, plugin bin/ — Claude Code
+    # surface area without 1:1 equivalents in most targets. Archive verbatim
+    # so the user can hand-port the ones they actually use.
+    extras = scan.get("claude_extras") or {}
+    if extras:
+        ex_dir = ensure_dir(archive / "claude-extras")
+        ex_index: list[str] = [
+            "# Claude Code Extras (2026 spec)",
+            "",
+            "Surface area beyond the canonical IR — typically with no direct",
+            "equivalent in your target agent. Each bucket below is preserved",
+            "verbatim so you can re-create it manually if needed.",
+            "",
+        ]
+        # Slash commands — write each as a standalone .md so the user can
+        # drop it into their target's command system if it has one.
+        cmd_buckets = [
+            ("commands_global", "global custom slash command"),
+            ("commands_project", "project custom slash command"),
+            ("plugins_commands", "plugin-bundled slash command"),
+        ]
+        for key, label in cmd_buckets:
+            commands = extras.get(key) or []
+            if not commands:
+                continue
+            sub = ensure_dir(ex_dir / key)
+            ex_index.append(f"## {key} ({len(commands)} {label}{'s' if len(commands)!=1 else ''})")
+            ex_index.append("")
+            for c in commands:
+                safe = c["name"].replace(":", "__").replace("/", "__")
+                p = sub / f"{safe}.md"
+                # Reconstruct frontmatter + body so command is self-contained
+                fm_lines = []
+                if c.get("frontmatter"):
+                    fm_lines.append("---")
+                    for k, v in c["frontmatter"].items():
+                        fm_lines.append(f"{k}: {v}")
+                    fm_lines.append("---")
+                    fm_lines.append("")
+                p.write_text("\n".join(fm_lines) + (c.get("body") or ""), encoding="utf-8")
+                written.append(str(p))
+                ex_index.append(f"- `{key}/{p.name}` — `/{c['name']}` (from `{c['path']}`)")
+            ex_index.append("")
+        # Themes — verbatim copy
+        themes = extras.get("themes") or []
+        if themes:
+            t_sub = ensure_dir(ex_dir / "themes")
+            ex_index.append(f"## themes ({len(themes)} files)")
+            ex_index.append("")
+            for t in themes:
+                safe = t["file"].replace("/", "__")
+                p = t_sub / safe
+                p.write_text(t.get("content", ""), encoding="utf-8")
+                written.append(str(p))
+                ex_index.append(f"- `themes/{safe}` — from `{t['path']}`")
+            ex_index.append("")
+        # Keybindings — single JSON
+        kb = extras.get("keybindings")
+        if kb:
+            p = ex_dir / "keybindings.json"
+            p.write_text(json.dumps(kb, indent=2, ensure_ascii=False), encoding="utf-8")
+            written.append(str(p))
+            ex_index.append("## keybindings")
+            ex_index.append("")
+            ex_index.append("- `keybindings.json` — full ~/.claude/keybindings.json (target-specific; "
+                            "most agents have their own keybinding system)")
+            ex_index.append("")
+        # Plugins with bin/ — note the existence; files live under the
+        # original install_path which may or may not be on the migrated
+        # machine.
+        bin_plugins = extras.get("plugins_with_bin") or []
+        if bin_plugins:
+            ex_index.append("## plugins with bin/ (W14 feature)")
+            ex_index.append("")
+            ex_index.append("These plugins ship PATH-injected executables. The Bash tool")
+            ex_index.append("called them as bare commands; in your target agent you'll need")
+            ex_index.append("to either install the plugin natively or copy the binaries onto")
+            ex_index.append("your PATH manually.")
+            ex_index.append("")
+            for bp in bin_plugins:
+                ex_index.append(f"- **{bp['id']}** — `bin/`: {', '.join(bp['bin_files'])}  "
+                                f"(install path: `{bp['install_path']}`)")
+            ex_index.append("")
+        idx_p = ex_dir / "INDEX.md"
+        idx_p.write_text("\n".join(ex_index) + "\n", encoding="utf-8")
+        written.append(str(idx_p))
+
     # Secret manifest (SHA256 hashes only, no raw values — safe to commit)
     try:
         from ..secrets import scan_secrets
